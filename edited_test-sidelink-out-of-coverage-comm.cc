@@ -142,7 +142,7 @@ int main (int argc, char *argv[]){
   //Initialize simulation time
     Time startTime = Seconds (1);
     Time simulationTime = Seconds (25);
-    //Time stopTime = simulationTime;
+    Time stopTime = simulationTime;
 
 
   double simTime = 25;
