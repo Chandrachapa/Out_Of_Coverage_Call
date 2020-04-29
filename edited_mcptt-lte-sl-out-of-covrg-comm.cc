@@ -136,8 +136,43 @@ int main (int argc, char *argv[])
   NS_LOG_INFO ("Deploying UE's...");
 
   //Create nodes (UEs)
+  uint32_t appCount = 1;
   NodeContainer ueNodes;
-  ueNodes.Create (3);
+  ueNodes.Create (appCount);
+  
+   
+    //Install LTE UE devices to the nodes //error
+  //topologer configuration  
+  NS_LOG_INFO ("Building physical topology...");
+  double maxX = 5.0;
+  double maxY = 5.0;
+  Ptr<RandomBoxPositionAllocator> rndBoxPosAllocator = CreateObject <RandomBoxPositionAllocator> ();
+  rndBoxPosAllocator->SetX (CreateObjectWithAttributes<UniformRandomVariable> ("Min", DoubleValue (0.0), "Max", DoubleValue (maxX)));
+  rndBoxPosAllocator->SetY (CreateObjectWithAttributes<UniformRandomVariable> ("Min", DoubleValue (0.0), "Max", DoubleValue (maxY)));
+  rndBoxPosAllocator->SetZ (CreateObjectWithAttributes<ConstantRandomVariable> ("Constant", DoubleValue (1.5)));
+  
+
+
+  //allocating position of nodes 
+  
+  Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
+  for (uint32_t count = 0; count < appCount; count++)
+    {
+      Vector position = rndBoxPosAllocator->GetNext ();
+
+      NS_LOG_INFO ("UE " << (count + 1) << " located at " << position << ".");
+
+      positionAlloc->Add (position);
+    }
+  
+  //mobility of nodes set to stationary
+  MobilityHelper mobility;
+  mobility.SetPositionAllocator (positionAlloc);
+  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+  mobility.Install (ueNodes);
+  
+  /*
+
   NS_LOG_INFO ("UE 1 node id = [" << ueNodes.Get (0)->GetId () << "]");
   NS_LOG_INFO ("UE 2 node id = [" << ueNodes.Get (1)->GetId () << "]");
 
@@ -165,6 +200,7 @@ int main (int argc, char *argv[])
   mobilityUe3.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
   mobilityUe3.SetPositionAllocator (positionAllocUe3);
   mobilityUe3.Install (ueNodes.Get (2));
+  */
   //Install LTE UE devices to the nodes
   NetDeviceContainer ueDevs = lteHelper->InstallUeDevice (ueNodes);
 
@@ -177,6 +213,18 @@ int main (int argc, char *argv[])
   preconfiguration.preconfigGeneral.carrierFreq = ulEarfcn;
   preconfiguration.preconfigGeneral.slBandwidth = ulBandwidth;
   preconfiguration.preconfigComm.nbPools = 1;
+  //-Configure preconfigured communication pool
+  preconfiguration.preconfigComm = proseHelper->GetDefaultSlPreconfigCommPoolList ();
+  //-Configure preconfigured discovery pool
+  preconfiguration.preconfigDisc = proseHelper->GetDefaultSlPreconfigDiscPoolList ();
+
+  //-Configure preconfigured UE-to-Network Relay parameters
+  preconfiguration.preconfigRelay = proseHelper->GetDefaultSlPreconfigRelay ();
+  
+  //-Enable discovery
+  ueSidelinkConfiguration->SetDiscEnabled (true);
+  //-Set frequency for discovery messages monitoring
+  //ueSidelinkConfiguration->SetDiscInterFreq (ueDevs.Get (0)->GetObject<LteEnbNetDevice> ()->GetUlEarfcn ());
 
   LteSlPreconfigPoolFactory pfactory;
 
@@ -197,8 +245,13 @@ int main (int argc, char *argv[])
 
   preconfiguration.preconfigComm.pools[0] = pfactory.CreatePool ();
   pfactory.SetHaveUeSelectedResourceConfig (true);
+  
+  
+  
   ueSidelinkConfiguration->SetSlPreconfiguration (preconfiguration);
   lteHelper->InstallSidelinkConfiguration (ueDevs, ueSidelinkConfiguration);
+  
+
 
   InternetStackHelper internet;
   internet.Install (ueNodes);
@@ -293,8 +346,10 @@ int main (int argc, char *argv[])
   Ptr<McpttPttApp> ueAPttApp =  DynamicCast<McpttPttApp, Application> (clientApps.Get (0));
   
   Ptr<McpttCall> ueACall = ueAPttApp->GetSelectedCall ();
-  
+  Ptr<McpttPusher> ueAPusher = ueAPttApp->GetPusher ();
+  Ptr<McpttMediaSrc> ueAMediaSrc = ueAPttApp->GetMediaSrc ();
   McpttCallMsg msg;
+  Simulator::Schedule (Seconds (1.1), &McpttPttApp::TakePushNotification, ueAPttApp);
   uint16_t floorPort = McpttPttApp::AllocateNextPortNumber ();
   uint16_t speechPort = McpttPttApp::AllocateNextPortNumber ();
   /*
@@ -304,14 +359,15 @@ int main (int argc, char *argv[])
   Ipv4AddressValue grpAddress;
   Simulator::Schedule (Seconds (5.15), &McpttCall::OpenFloorChan, ueACall, grpAddress.Get (), floorPort);
   Simulator::Schedule (Seconds (6), &McpttCall::OpenMediaChan, ueACall, grpAddress.Get (), speechPort);
-  
+  Simulator::Schedule (Seconds (8), &McpttPttApp::ReleaseCall, ueAPttApp);
 
   //Set Sidelink bearers
   proseHelper->ActivateSidelinkBearer (slBearersActivationTime, ueDevs, tft);
   ///*** End of application configuration ***///
 
   NS_LOG_INFO ("Enabling Sidelink traces...");
-
+  
+  lteHelper->EnablePdcpTraces ();
   lteHelper->EnableSlPscchMacTraces ();
   lteHelper->EnableSlPsschMacTraces ();
 
