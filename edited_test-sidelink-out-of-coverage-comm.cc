@@ -305,7 +305,7 @@ int main (int argc, char *argv[]){
   ///*** Configure applications ***///
   
 
-  //mcptt application
+//mcptt application
 //configurations 
 //variable declarations for using push to talk 
 //uint32_t appCount;
@@ -322,7 +322,7 @@ double releaseTimeVariance = 1.0; // seconds
 
 TypeId socketFacTid = UdpSocketFactory::GetTypeId ();
 std::vector<uint32_t> groupL2Addresses;
-uint32_t groupL2Address = 200;
+uint32_t groupL2Address = 255;
 Ipv4AddressGenerator::Init (Ipv4Address ("225.0.0.0"), Ipv4Mask ("255.0.0.0"));
 Ipv4Address groupAddress = Ipv4AddressGenerator::NextAddress (Ipv4Mask ("255.0.0.0"));
 //Ipv4Address groupAddress = Ipv4Address ("10.255.255.255"); //use multicast address as destination  

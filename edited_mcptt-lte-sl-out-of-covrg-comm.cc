@@ -137,7 +137,7 @@ int main (int argc, char *argv[])
 
   //Create nodes (UEs)
   NodeContainer ueNodes;
-  ueNodes.Create (2);
+  ueNodes.Create (usersPerGroup);
   NS_LOG_INFO ("UE 1 node id = [" << ueNodes.Get (0)->GetId () << "]");
   NS_LOG_INFO ("UE 2 node id = [" << ueNodes.Get (1)->GetId () << "]");
 
@@ -190,7 +190,7 @@ int main (int argc, char *argv[])
   pfactory.SetDataPrbEnd (49);
 
   preconfiguration.preconfigComm.pools[0] = pfactory.CreatePool ();
-
+  pfactory.SetHaveUeSelectedResourceConfig (true);
   ueSidelinkConfiguration->SetSlPreconfiguration (preconfiguration);
   lteHelper->InstallSidelinkConfiguration (ueDevs, ueSidelinkConfiguration);
 
@@ -266,7 +266,40 @@ int main (int argc, char *argv[])
   clientApps.Start (startTime);
   clientApps.Stop (stopTime);
 
-  mcpttHelper.ConfigureBasicGrpCall (clientApps, usersPerGroup);
+  
+  ObjectFactory callFac;
+  callFac.SetTypeId ("ns3::McpttCallMachineGrpBasic");
+
+  ObjectFactory floorFac;
+  floorFac.SetTypeId ("ns3::McpttFloorMachineBasic");
+
+  for (uint32_t idx = 0; idx < clientApps.GetN (); idx++)
+    {
+      Ptr<McpttPttApp> pttApp = DynamicCast<McpttPttApp, Application> (clientApps.Get (idx));
+
+      pttApp->CreateCall (callFac, floorFac);
+      pttApp->SelectLastCall ();
+ 
+     
+    }
+
+
+  //Ptr<McpttCall> ueACall = PttApp->GetSelectedCall ();
+  Ptr<McpttPttApp> ueAPttApp =  DynamicCast<McpttPttApp, Application> (clientApps.Get (0));
+  
+  Ptr<McpttCall> ueACall = ueAPttApp->GetSelectedCall ();
+  
+  McpttCallMsg msg;
+  uint16_t floorPort = McpttPttApp::AllocateNextPortNumber ();
+  uint16_t speechPort = McpttPttApp::AllocateNextPortNumber ();
+  /*
+  //set a delay of delaytfb1
+  //Simulator::Schedule (Seconds (5), &McpttTimer::Start,rawTimer);
+   */
+  Ipv4AddressValue grpAddress;
+  Simulator::Schedule (Seconds (5.15), &McpttCall::OpenFloorChan, ueACall, grpAddress.Get (), floorPort);
+  Simulator::Schedule (Seconds (6), &McpttCall::OpenMediaChan, ueACall, grpAddress.Get (), speechPort);
+  
 
   //Set Sidelink bearers
   proseHelper->ActivateSidelinkBearer (slBearersActivationTime, ueDevs, tft);
@@ -285,7 +318,8 @@ int main (int argc, char *argv[])
   mcpttHelper.EnableStateMachineTraces ();
 
   NS_LOG_INFO ("Starting simulation...");
-AnimationInterface anim("out_coverage.xml");
+  AnimationInterface anim("sl_mcptt.xml");
+  anim.SetMaxPktsPerTraceFile(500000); 
   Simulator::Stop (simTime);
 
   Simulator::Run ();
