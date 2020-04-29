@@ -65,7 +65,7 @@ int main (int argc, char *argv[])
   bool useIPv6 = false;  // Placeholder; keep 'false' until IPv6 supported
 
   // configuration
-  uint32_t usersPerGroup = 2;
+ //uint32_t usersPerGroup = 2;
   DataRate dataRate = DataRate ("24kb/s");
   uint32_t msgSize = 60; //60 + RTP header = 60 + 12 = 72
   double pushTimeMean = 5.0; // seconds
@@ -137,16 +137,18 @@ int main (int argc, char *argv[])
 
   //Create nodes (UEs)
   NodeContainer ueNodes;
-  ueNodes.Create (usersPerGroup);
+  ueNodes.Create (3);
   NS_LOG_INFO ("UE 1 node id = [" << ueNodes.Get (0)->GetId () << "]");
   NS_LOG_INFO ("UE 2 node id = [" << ueNodes.Get (1)->GetId () << "]");
+
 
   //Position of the nodes
   Ptr<ListPositionAllocator> positionAllocUe1 = CreateObject<ListPositionAllocator> ();
   positionAllocUe1->Add (Vector (0.0, 0.0, 1.5));
   Ptr<ListPositionAllocator> positionAllocUe2 = CreateObject<ListPositionAllocator> ();
   positionAllocUe2->Add (Vector (20.0, 0.0, 1.5));
-
+  Ptr<ListPositionAllocator> positionAllocUe3 = CreateObject<ListPositionAllocator> ();
+  positionAllocUe3->Add (Vector (10.0, 0.0, 1.5));
   //Install mobility
 
   MobilityHelper mobilityUe1;
@@ -159,6 +161,10 @@ int main (int argc, char *argv[])
   mobilityUe2.SetPositionAllocator (positionAllocUe2);
   mobilityUe2.Install (ueNodes.Get (1));
 
+  MobilityHelper mobilityUe3;
+  mobilityUe3.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+  mobilityUe3.SetPositionAllocator (positionAllocUe3);
+  mobilityUe3.Install (ueNodes.Get (2));
   //Install LTE UE devices to the nodes
   NetDeviceContainer ueDevs = lteHelper->InstallUeDevice (ueNodes);
 
@@ -283,7 +289,6 @@ int main (int argc, char *argv[])
      
     }
 
-
   //Ptr<McpttCall> ueACall = PttApp->GetSelectedCall ();
   Ptr<McpttPttApp> ueAPttApp =  DynamicCast<McpttPttApp, Application> (clientApps.Get (0));
   
@@ -320,6 +325,9 @@ int main (int argc, char *argv[])
   NS_LOG_INFO ("Starting simulation...");
   AnimationInterface anim("sl_mcptt.xml");
   anim.SetMaxPktsPerTraceFile(500000); 
+//set constant position
+ 
+
   Simulator::Stop (simTime);
 
   Simulator::Run ();

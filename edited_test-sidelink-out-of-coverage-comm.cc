@@ -53,7 +53,11 @@
 #include "ns3/net-device-container.h"
 #include "ns3/node-container.h"
 #include "ns3/log.h"
-
+#include "ns3/network-module.h"
+#include "ns3/core-module.h"
+#include "ns3/mobility-module.h"
+#include "ns3/lte-module.h"
+#include "ns3/internet-module.h"
 //added 
 #include <ns3/mcptt-call-machine-grp-broadcast.h> 
 #include <ns3/mcptt-call-machine-grp-basic.h>
@@ -323,10 +327,53 @@ double releaseTimeVariance = 1.0; // seconds
 TypeId socketFacTid = UdpSocketFactory::GetTypeId ();
 std::vector<uint32_t> groupL2Addresses;
 uint32_t groupL2Address = 255;
-Ipv4AddressGenerator::Init (Ipv4Address ("225.0.0.0"), Ipv4Mask ("255.0.0.0"));
-Ipv4Address groupAddress = Ipv4AddressGenerator::NextAddress (Ipv4Mask ("255.0.0.0"));
+  Ipv4Address groupAddress4 ("225.0.0.0");     //use multicast address as destination
+  Ipv6Address groupAddress6 ("ff0e::1"); 
+  Ipv4Address peerAddress = Ipv4Address ("225.0.0.0");
+  Address remoteAddress;
+  Address localAddress;
+  Ptr<LteSlTft> tft;
 //Ipv4Address groupAddress = Ipv4Address ("10.255.255.255"); //use multicast address as destination  
-  
+bool useIPv6 = false; 
+    if (!useIPv6)
+    {
+      Ipv4InterfaceContainer ueIpIface;
+      ueIpIface = epcHelper->AssignUeIpv4Address (NetDeviceContainer (ueDevs));
+
+      // set the default gateway for the UE
+      Ipv4StaticRoutingHelper ipv4RoutingHelper;
+      for (uint32_t u = 0; u < ueNodes.GetN (); ++u)
+        {
+          Ptr<Node> ueNode = ueNodes.Get (u);
+          // Set the default gateway for the UE
+          Ptr<Ipv4StaticRouting> ueStaticRouting = ipv4RoutingHelper.GetStaticRouting (ueNode->GetObject<Ipv4> ());
+          ueStaticRouting->SetDefaultRoute (epcHelper->GetUeDefaultGatewayAddress (), 1);
+        }
+      remoteAddress = InetSocketAddress (groupAddress4, 8000);
+      localAddress = InetSocketAddress (Ipv4Address::GetAny (), 8000);
+      tft = Create<LteSlTft> (LteSlTft::BIDIRECTIONAL, groupAddress4, groupL2Address);
+    }
+  else
+    {
+      Ipv6InterfaceContainer ueIpIface;
+      ueIpIface = epcHelper->AssignUeIpv6Address (NetDeviceContainer (ueDevs));
+
+      // set the default gateway for the UE
+      Ipv6StaticRoutingHelper ipv6RoutingHelper;
+      for (uint32_t u = 0; u < ueNodes.GetN (); ++u)
+        {
+          Ptr<Node> ueNode = ueNodes.Get (u);
+          // Set the default gateway for the UE
+          Ptr<Ipv6StaticRouting> ueStaticRouting = ipv6RoutingHelper.GetStaticRouting (ueNode->GetObject<Ipv6> ());
+          ueStaticRouting->SetDefaultRoute (epcHelper->GetUeDefaultGatewayAddress6 (), 1);
+        }
+      remoteAddress = Inet6SocketAddress (groupAddress6, 8000);
+      localAddress = Inet6SocketAddress (Ipv6Address::GetAny (), 8000);
+      tft = Create<LteSlTft> (LteSlTft::BIDIRECTIONAL, groupAddress6, groupL2Address);
+    }
+
+
+
   ApplicationContainer clientApps;
   McpttHelper mcpttClient;
   McpttTimer mcpttTimer;
@@ -335,7 +382,7 @@ Ipv4Address groupAddress = Ipv4AddressGenerator::NextAddress (Ipv4Mask ("255.0.0
   clientApps.Add (mcpttClient.Install (ueNodes));
 
   mcpttClient.SetPttApp ("ns3::McpttPttApp",
-                         "PeerAddress", Ipv4AddressValue (groupAddress),
+                         "PeerAddress", Ipv4AddressValue (peerAddress),
                          "PushOnStart", BooleanValue (true));
   mcpttClient.SetMediaSrc ("ns3::McpttMediaSrc",
                          "Bytes", UintegerValue (msgSize),
@@ -409,9 +456,9 @@ Ipv4Address groupAddress = Ipv4AddressGenerator::NextAddress (Ipv4Mask ("255.0.0
   std::ostringstream oss;
   oss << "/NodeList/" << ueNodes.Get (1)->GetId () << "/ApplicationList/0/$ns3::PacketSink/Rx";
   //Config::ConnectWithoutContext (oss.str (), MakeCallback (&SidelinkOutOfCoverageCommTestCase::SinkRxNode,this));
-
+  
   //Set Sidelink bearers
-  Ptr<LteSlTft> tft = Create<LteSlTft> (LteSlTft::BIDIRECTIONAL, groupAddress, groupL2Address);
+  //Ptr<LteSlTft> tft = Create<LteSlTft> (LteSlTft::BIDIRECTIONAL, groupAddress4, groupL2Address);
   proseHelper->ActivateSidelinkBearer (Seconds (2.0), ueDevs, tft);
   NoBackhaulEpcHelper nobackhaulHelper;
   Ptr<NetDevice> uedevice;
