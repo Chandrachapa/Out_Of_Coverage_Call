@@ -96,6 +96,11 @@ TypeId socketFacTid = UdpSocketFactory::GetTypeId ();
 //uint32_t groupId = 1;
 Ipv4Address peerAddress = Ipv4Address ("255.255.255.255");
 appCount = usersPerGroup * groupcount;
+  
+uint16_t floorPort = McpttPttApp::AllocateNextPortNumber ();
+uint16_t speechPort = McpttPttApp::AllocateNextPortNumber ();
+Ipv4AddressValue grpAddress;
+
 
 // set config for floor request and call generation
 //McpttFloorMsgFieldSsrc ssrc;
@@ -333,7 +338,60 @@ McpttTimer mcpttTimer;
 
 /*Call flow process************************************************************************************/
 
- //floor request
+//set call owner, call id, mcptt id, call type, etc.**************************************
+
+  //create floor and call control machines************************************************ 
+ObjectFactory callFac;
+callFac.SetTypeId ("ns3::McpttCallMachineGrpBroadcast");
+
+ObjectFactory floorFac;
+floorFac.SetTypeId ("ns3::McpttFloorMachineBasic");
+  
+Ipv4AddressValue grpAddr;
+
+//creating location to store application info of UEs A, B 
+Ptr<McpttPttApp> ueAPttApp = DynamicCast<McpttPttApp, Application> (clientApps.Get (0));
+Ptr<McpttPttApp> ueBPttApp = DynamicCast<McpttPttApp, Application> (clientApps.Get (1));
+  
+//push button press schedule
+Simulator::Schedule (Seconds (1.1), &McpttPttApp::TakePushNotification, ueAPttApp);
+
+//send floor request*********************************************
+ 
+//floor and call machines generate*******************************
+McpttCallMachineGrpBroadcast machines;
+ 
+// generate call 
+ueAPttApp->CreateCall (callFac, floorFac);
+ueAPttApp->SelectLastCall ();
+ueBPttApp->CreateCall (callFac, floorFac);
+ueBPttApp->SelectLastCall ();
+  
+//creating call interfaces and location to store call of UEs A, B 
+Ptr<McpttCall> ueACall = ueAPttApp->GetSelectedCall ();
+Ptr<McpttCall> ueBCall = ueBPttApp->GetSelectedCall ();
+Ptr<McpttChan> callChan = ueAPttApp->GetCallChan ();
+  
+Ptr<McpttCallMachine> ueAMachine = ueACall->GetCallMachine ();
+Ptr<McpttCallMachine> ueBMachine = ueBCall->GetCallMachine ();
+
+Ptr<McpttPusher> ueAPusher = ueAPttApp->GetPusher ();
+Ptr<McpttPusher> ueBPusher = ueBPttApp->GetPusher ();
+
+Ptr<McpttMediaSrc> ueAMediaSrc = ueAPttApp->GetMediaSrc ();
+Ptr<McpttMediaSrc> ueBMediaSrc = ueBPttApp->GetMediaSrc ();
+
+McpttCallMachineGrpBroadcast broadcastMachines;
+broadcastMachines.SetDelayTfb1(delayTfb1);
+broadcastMachines.SetDelayTfb2(delayTfb1);
+broadcastMachines.SetDelayTfb3(delayTfb1);
+Ptr<McpttTimer> tfb1 =broadcastMachines.GetTfb1();
+Ptr<McpttTimer> tfb2 =broadcastMachines.GetTfb2();
+Ptr<McpttTimer> tfb3 =broadcastMachines.GetTfb3();
+
+Simulator::Schedule (Seconds (5.15), &McpttCall::OpenFloorChan, ueACall, grpAddress.Get (), floorPort);
+//Simulator::Schedule (Seconds (5.15), &McpttCall::OpenFloorChan, ueBCall, grpAddress.Get (), floorPort);
+
  /*
  McpttFloorMsgRequest::McpttFloorMsgRequest (uint32_t ssrc)
   : McpttFloorMsg (McpttFloorMsgRequest::SUBTYPE, ssrc)
@@ -359,112 +417,58 @@ McpttTimer mcpttTimer;
 }
  */
 
- //floor grant 
- //assume floor granted 
+//receive floor granted******************************* 
        
- //floor control info (SCI) share to all participants
-  ObjectFactory callFac;
-  callFac.SetTypeId ("ns3::McpttCallMachineGrpBroadcast");
+//send floor control info (SCI) share to all participants**************
 
-  ObjectFactory floorFac;
-  floorFac.SetTypeId ("ns3::McpttFloorMachineBasic");
-  
+//relay : reception of SCI and decide to join the call
 
-  Ipv4AddressValue grpAddr;
 
-  //creating location to store application info of UEs A, B 
-  Ptr<McpttPttApp> ueAPttApp = DynamicCast<McpttPttApp, Application> (clientApps.Get (0));
-  Ptr<McpttPttApp> ueBPttApp = DynamicCast<McpttPttApp, Application> (clientApps.Get (1));
-  
-  //push button press schedule
-  Simulator::Schedule (Seconds (1.1), &McpttPttApp::TakePushNotification, ueAPttApp);
+//generate message************************************ 
+//Ptr<McpttTimer> ueATfb1 = ueAMachine->GetTfb1 ();
+Ptr<Packet> pkt = Create<Packet> ();
+pkt->AddHeader (msg);
+//callChan->Send (pkt);  
  
-  McpttCallMachineGrpBroadcast machines;
- 
-  // generate call 
-  ueAPttApp->CreateCall (callFac, floorFac);
-  ueAPttApp->SelectLastCall ();
-  ueBPttApp->CreateCall (callFac, floorFac);
-  ueBPttApp->SelectLastCall ();
+NS_LOG_LOGIC (Simulator::Now ().GetSeconds () << "s: PttApp sending " << msg << ".");
+
+//establish media session***************************** 
+Simulator::Schedule (Seconds (5.15), &McpttCall::OpenMediaChan, ueACall, grpAddress.Get (), speechPort); 
+//Simulator::Schedule (Seconds (5.15), &McpttCall::OpenMediaChan, ueBCall, grpAddress.Get (), speechPort);
+
+//release button : send call***************************
+
+
+//start timer TFB1 and TFB2***************************
+Simulator::Schedule (Seconds (2.1), &McpttTimer::Start, tfb1);
+
+// synchronization and call in progress 
   
-  //creating call interfaces and location to store call of UEs A, B 
-  Ptr<McpttCall> ueACall = ueAPttApp->GetSelectedCall ();
-  Ptr<McpttCall> ueBCall = ueBPttApp->GetSelectedCall ();
-  Ptr<McpttChan> callChan = ueAPttApp->GetCallChan ();
+//end of call
+Simulator::Schedule (Seconds (3.0), &McpttPttApp::ReleaseCall, ueAPttApp);
+
+
+
+
+//Result generation*******************************************
+NS_LOG_INFO ("Enabling MCPTT traces...");
+mcpttHelper.EnableMsgTraces ();
+mcpttHelper.EnableStateMachineTraces ();
   
-  Ptr<McpttCallMachine> ueAMachine = ueACall->GetCallMachine ();
-  Ptr<McpttCallMachine> ueBMachine = ueBCall->GetCallMachine ();
+NS_LOG_INFO ("Starting simulation...");
+AnimationInterface anim("b20.xml");
+anim.SetMaxPktsPerTraceFile(500000);
 
-  Ptr<McpttPusher> ueAPusher = ueAPttApp->GetPusher ();
-  Ptr<McpttPusher> ueBPusher = ueBPttApp->GetPusher ();
+std::cout << "okay 4" << "\n" ;
+//Simulator::Stop (Seconds (stopTime));
+//anim.SetConstantPosition(nodes.Get(0),1.0,2.0);
+//anim.SetConstantPosition(nodes.Get(1),4.0,5.0);
+Simulator::Run ();
+Simulator::Destroy();
 
-  Ptr<McpttMediaSrc> ueAMediaSrc = ueAPttApp->GetMediaSrc ();
-  Ptr<McpttMediaSrc> ueBMediaSrc = ueBPttApp->GetMediaSrc ();
+NS_LOG_UNCOND ("Done Simulator");
 
-  McpttCallMachineGrpBroadcast broadcastMachines;
-  broadcastMachines.SetDelayTfb1(delayTfb1);
-  broadcastMachines.SetDelayTfb2(delayTfb1);
-  broadcastMachines.SetDelayTfb3(delayTfb1);
-  Ptr<McpttTimer> tfb1 =broadcastMachines.GetTfb1();
-  Ptr<McpttTimer> tfb2 =broadcastMachines.GetTfb2();
-  Ptr<McpttTimer> tfb3 =broadcastMachines.GetTfb3();
-  Simulator::Schedule (Seconds (2.1), &McpttTimer::Start, tfb1);
-
-  //Ptr<McpttTimer> ueATfb1 = ueAMachine->GetTfb1 ();
-  Ptr<Packet> pkt = Create<Packet> ();
-
-  pkt->AddHeader (msg);
-  //callChan->Send (pkt);
- 
-  NS_LOG_LOGIC (Simulator::Now ().GetSeconds () << "s: PttApp sending " << msg << ".");
-  
-
-
-  //send call 
-   
-  //start timer 
-  // timer expire or end call message
-  //mcpttTimer.SetDelay (delayTfb1);
-    //allocating position of nodes 
-
- 
-  //mcpttTimer.SetDelay(Seconds(10));
-  
-  uint16_t floorPort = McpttPttApp::AllocateNextPortNumber ();
-  uint16_t speechPort = McpttPttApp::AllocateNextPortNumber ();
-  Ipv4AddressValue grpAddress;
-
-  Simulator::Schedule (Seconds (5.15), &McpttCall::OpenFloorChan, ueACall, grpAddress.Get (), floorPort);
-  Simulator::Schedule (Seconds (5.15), &McpttCall::OpenMediaChan, ueACall, grpAddress.Get (), speechPort);
-  //Simulator::Schedule (Seconds (5.15), &McpttCall::OpenFloorChan, ueBCall, grpAddress.Get (), floorPort);
-  //Simulator::Schedule (Seconds (5.15), &McpttCall::OpenMediaChan, ueBCall, grpAddress.Get (), speechPort);
-  
- 
-  // synchronization and in progress 
-  
-  //end of call
-  Simulator::Schedule (Seconds (3.0), &McpttPttApp::ReleaseCall, ueAPttApp);
-
-
-  //receiver : reception of floor request 
-  NS_LOG_INFO ("Enabling MCPTT traces...");
-  mcpttHelper.EnableMsgTraces ();
-  mcpttHelper.EnableStateMachineTraces ();
-  
-  NS_LOG_INFO ("Starting simulation...");
-  AnimationInterface anim("b20.xml");
-  anim.SetMaxPktsPerTraceFile(500000);
-
-  std::cout << "okay 4" << "\n" ;
-  //Simulator::Stop (Seconds (stopTime));
-  //anim.SetConstantPosition(nodes.Get(0),1.0,2.0);
-  //anim.SetConstantPosition(nodes.Get(1),4.0,5.0);
-  Simulator::Run ();
-  Simulator::Destroy();
-
-  NS_LOG_UNCOND ("Done Simulator");
-
-  NS_LOG_INFO ("Done.");
+NS_LOG_INFO ("Done.");
   
   
 }
