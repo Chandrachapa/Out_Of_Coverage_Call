@@ -411,8 +411,6 @@ pool.ueSelected.poolToAddModList.pools[0].poolIdentity = 1;
      
     }
 
-  
-  
   Ptr<McpttPttApp> ueAPttApp =  DynamicCast<McpttPttApp, Application> (clientApps.Get (0));
   Ptr<McpttCall > ueACall = ueAPttApp->GetSelectedCall ();
   Ptr<McpttChan> callChan = ueAPttApp->GetCallChan ();
@@ -433,6 +431,9 @@ pool.ueSelected.poolToAddModList.pools[0].poolIdentity = 1;
   Simulator::Schedule (Seconds (5.15), &McpttCall::OpenFloorChan, ueACall, grpAddress.Get (), floorPort);
   Simulator::Schedule (Seconds (6), &McpttCall::OpenMediaChan, ueACall, grpAddress.Get (), speechPort);
   //Simulator::Schedule (Seconds (8), &McpttPttApp::ReleaseCall, ueAPttApp);
+  //end of call
+  Simulator::Schedule (Seconds (3.0), &McpttPttApp::ReleaseCall, ueAPttApp);
+
 
   //Set Sidelink bearers
   //proseHelper->ActivateSidelinkBearer (slBearersActivationTime, ueDevs, tft);
