@@ -43,6 +43,7 @@
 #include <cfloat>
 #include <sstream>
 #include "ns3/netanim-module.h"
+#include "ns3/wifi-module.h"
 
 using namespace ns3;
 
@@ -62,18 +63,18 @@ int main (int argc, char *argv[])
 {
   Time simTime = Seconds (15);
   bool enableNsLogs = false;
-  bool useIPv6 = false;  // Placeholder; keep 'false' until IPv6 supported
+  //bool useIPv6 = false;  // Placeholder; keep 'false' until IPv6 supported
 
   // configuration
  //uint32_t usersPerGroup = 2;
-  DataRate dataRate = DataRate ("24kb/s");
-  uint32_t msgSize = 60; //60 + RTP header = 60 + 12 = 72
+ DataRate dataRate = DataRate ("24kb/s");
+ uint32_t msgSize = 60; //60 + RTP header = 60 + 12 = 72
   double pushTimeMean = 5.0; // seconds
-  double pushTimeVariance = 2.0; // seconds
+ double pushTimeVariance = 2.0; // seconds
   double releaseTimeMean = 5.0; // seconds
   double releaseTimeVariance = 2.0; // seconds
-  Ipv4Address peerAddress = Ipv4Address ("225.0.0.0");
-  Time startTime = Seconds (2);
+Ipv4Address peerAddress = Ipv4Address ("225.0.0.0");
+  Time startTime = Seconds (0);
   Time stopTime = simTime;
 
   //Configure the UE for UE_SELECTED scenario
@@ -90,7 +91,7 @@ int main (int argc, char *argv[])
   Config::SetDefault ("ns3::LteSpectrumPhy::SlCtrlErrorModelEnabled", BooleanValue (true));
   Config::SetDefault ("ns3::LteSpectrumPhy::SlDataErrorModelEnabled", BooleanValue (true));
   Config::SetDefault ("ns3::LteSpectrumPhy::DropRbOnCollisionEnabled", BooleanValue (false));
-
+  
   //Set the UEs power in dBm
   Config::SetDefault ("ns3::LteUePhy::TxPower", DoubleValue (23.0));
 
@@ -106,12 +107,13 @@ int main (int argc, char *argv[])
   Ptr<LteHelper> lteHelper = CreateObject<LteHelper> ();
 
   //Create and set the EPC helper
-  Ptr<PointToPointEpcHelper>  epcHelper = CreateObject<PointToPointEpcHelper> ();
-  lteHelper->SetEpcHelper (epcHelper);
+  //Ptr<PointToPointEpcHelper>  epcHelper = CreateObject<PointToPointEpcHelper> ();
+  //lteHelper->SetEpcHelper (epcHelper);
 
   ////Create Sidelink helper and set lteHelper
   Ptr<LteSidelinkHelper> proseHelper = CreateObject<LteSidelinkHelper> ();
   proseHelper->SetLteHelper (lteHelper);
+  Config::SetDefault ("ns3::LteSlBasicUeController::ProseHelper",PointerValue (proseHelper));
 
   //Enable Sidelink
   lteHelper->SetAttribute ("UseSidelink", BooleanValue (true));
@@ -136,7 +138,7 @@ int main (int argc, char *argv[])
   NS_LOG_INFO ("Deploying UE's...");
 
   //Create nodes (UEs)
-  uint32_t appCount = 1;
+  uint32_t appCount = 3;
   NodeContainer ueNodes;
   ueNodes.Create (appCount);
   
@@ -170,6 +172,27 @@ int main (int argc, char *argv[])
   mobility.SetPositionAllocator (positionAlloc);
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
   mobility.Install (ueNodes);
+
+  //installing wifi interface in nodes
+  WifiHelper wifi;
+  wifi.SetStandard (WIFI_PHY_STANDARD_80211g); //2.4Ghz
+  wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager",
+                                "DataMode", StringValue ("ErpOfdmRate54Mbps"));
+ 
+  WifiMacHelper wifiMac;
+  YansWifiPhyHelper wifiPhy = YansWifiPhyHelper::Default ();
+  YansWifiChannelHelper wifiChannel;
+  wifiChannel.SetPropagationDelay ("ns3::ConstantSpeedPropagationDelayModel");
+  wifiChannel.AddPropagationLoss ("ns3::FriisPropagationLossModel",
+                                "Frequency", DoubleValue (2.407e9)); //2.4Ghz
+
+  wifiMac.SetType ("ns3::AdhocWifiMac");
+
+  YansWifiPhyHelper phy = wifiPhy;
+  phy.SetChannel (wifiChannel.Create ());
+
+  WifiMacHelper mac = wifiMac;
+  NetDeviceContainer devices = wifi.Install (phy, mac, ueNodes);
   
   /*
 
@@ -225,6 +248,14 @@ int main (int argc, char *argv[])
   ueSidelinkConfiguration->SetDiscEnabled (true);
   //-Set frequency for discovery messages monitoring
   //ueSidelinkConfiguration->SetDiscInterFreq (ueDevs.Get (0)->GetObject<LteEnbNetDevice> ()->GetUlEarfcn ());
+  
+LteRrcSap::SlCommTxResourcesSetup pool;
+pool.setup = LteRrcSap::SlCommTxResourcesSetup::UE_SELECTED;
+pool.ueSelected.havePoolToRelease = false;
+pool.ueSelected.havePoolToAdd = true;
+pool.ueSelected.poolToAddModList.nbPools = 1;
+pool.ueSelected.poolToAddModList.pools[0].poolIdentity = 1;
+
 
   LteSlPreconfigPoolFactory pfactory;
 
@@ -252,7 +283,7 @@ int main (int argc, char *argv[])
   lteHelper->InstallSidelinkConfiguration (ueDevs, ueSidelinkConfiguration);
   
 
-
+/*
   InternetStackHelper internet;
   internet.Install (ueNodes);
   uint32_t groupL2Address = 255;
@@ -297,8 +328,45 @@ int main (int argc, char *argv[])
       localAddress = Inet6SocketAddress (Ipv6Address::GetAny (), 8000);
       tft = Create<LteSlTft> (LteSlTft::BIDIRECTIONAL, groupAddress6, groupL2Address);
     }
+  */
+    //Install the IP stack on the UEs and assign network IP addresses
+  InternetStackHelper internet;
+  internet.Install (ueNodes);
+  //internet.Install (remoteUeNodes);
+  //Ipv6InterfaceContainer ueIpIfaceRelays;
+  //Ipv6InterfaceContainer ueIpIfaceRemotes;
+  //ueIpIfaceRelays = epcHelper->AssignUeIpv6Address (relayUeDevs);
+  //ueIpIfaceRemotes = epcHelper->AssignUeIpv6Address (remoteUeDevs);
 
+  //Set the default gateway for the UEs
+
+  
+  
   NS_LOG_INFO ("Creating applications...");
+
+  ///*** Configure applications ***///
+  //For each Remote UE, we have a pair (UpdEchoClient, UdpEchoServer)
+  //Each Remote UE has an assigned port
+  //UdpEchoClient installed in the Remote UE, sending to the echoServerAddr
+  //in the corresponding Remote UE port
+  //UdpEchoServer installed in the echoServerNode, listening to the
+  //corresponding Remote UE port
+    //Configure IP for the nodes in the Internet (PGW and RemoteHost)
+  NS_LOG_INFO ("Assigning IP addresses to each net device...");
+  Ipv4AddressHelper ipv4;
+  ipv4.SetBase ("10.1.1.0", "255.255.255.0");
+  Ipv4InterfaceContainer i = ipv4.Assign (ueDevs);
+
+
+  
+  //NS_LOG_INFO ("Remote UE node id = [" << remoteUeNodes.Get (0)->GetId () << "] start application at " << startTimeRemoteApp << " s");
+
+  //Stop the application after 10.0 s
+ // singleClientApp.Stop (Seconds (startTimeRemoteApp + 10.0));
+
+
+
+  
   ApplicationContainer clientApps;
   McpttHelper mcpttHelper;
   if (enableNsLogs)
@@ -324,6 +392,7 @@ int main (int argc, char *argv[])
   clientApps.Add (mcpttHelper.Install (ueNodes));
   clientApps.Start (startTime);
   clientApps.Stop (stopTime);
+  
 
   
   ObjectFactory callFac;
@@ -342,29 +411,39 @@ int main (int argc, char *argv[])
      
     }
 
-  //Ptr<McpttCall> ueACall = PttApp->GetSelectedCall ();
-  Ptr<McpttPttApp> ueAPttApp =  DynamicCast<McpttPttApp, Application> (clientApps.Get (0));
   
-  Ptr<McpttCall> ueACall = ueAPttApp->GetSelectedCall ();
+  
+  Ptr<McpttPttApp> ueAPttApp =  DynamicCast<McpttPttApp, Application> (clientApps.Get (0));
+  Ptr<McpttCall > ueACall = ueAPttApp->GetSelectedCall ();
+  Ptr<McpttChan> callChan = ueAPttApp->GetCallChan ();
   Ptr<McpttPusher> ueAPusher = ueAPttApp->GetPusher ();
   Ptr<McpttMediaSrc> ueAMediaSrc = ueAPttApp->GetMediaSrc ();
-  McpttCallMsg msg;
+  //Ptr<McpttCall> ueACall = ueAPttApp->GetSelectedCall ();
+  //Ptr<McpttPusher> ueAPusher = ueAPttApp->GetPusher ();
+  //Ptr<McpttMediaSrc> ueAMediaSrc = ueAPttApp->GetMediaSrc ();
+  //McpttCallMsg msg;
   Simulator::Schedule (Seconds (1.1), &McpttPttApp::TakePushNotification, ueAPttApp);
   uint16_t floorPort = McpttPttApp::AllocateNextPortNumber ();
   uint16_t speechPort = McpttPttApp::AllocateNextPortNumber ();
   /*
   //set a delay of delaytfb1
-  //Simulator::Schedule (Seconds (5), &McpttTimer::Start,rawTimer);
+  Simulator::Schedule (Seconds (5), &McpttTimer::Start,rawTimer);
    */
   Ipv4AddressValue grpAddress;
   Simulator::Schedule (Seconds (5.15), &McpttCall::OpenFloorChan, ueACall, grpAddress.Get (), floorPort);
   Simulator::Schedule (Seconds (6), &McpttCall::OpenMediaChan, ueACall, grpAddress.Get (), speechPort);
-  Simulator::Schedule (Seconds (8), &McpttPttApp::ReleaseCall, ueAPttApp);
+  //Simulator::Schedule (Seconds (8), &McpttPttApp::ReleaseCall, ueAPttApp);
 
   //Set Sidelink bearers
-  proseHelper->ActivateSidelinkBearer (slBearersActivationTime, ueDevs, tft);
+  //proseHelper->ActivateSidelinkBearer (slBearersActivationTime, ueDevs, tft);
   ///*** End of application configuration ***///
+  
+  AsciiTraceHelper ascii;
 
+  std::ostringstream oss;
+  Ptr<OutputStreamWrapper> packetOutputStream = ascii.CreateFileStream ("AppPacketTrace.txt");
+  *packetOutputStream->GetStream () << "time(sec)\ttx/rx\tC/S\tNodeID\tIP[src]\tIP[dst]\tPktSize(bytes)" << std::endl;
+  
   NS_LOG_INFO ("Enabling Sidelink traces...");
   
   lteHelper->EnablePdcpTraces ();
@@ -381,8 +460,6 @@ int main (int argc, char *argv[])
   NS_LOG_INFO ("Starting simulation...");
   AnimationInterface anim("sl_mcptt.xml");
   anim.SetMaxPktsPerTraceFile(500000); 
-//set constant position
- 
 
   Simulator::Stop (simTime);
 

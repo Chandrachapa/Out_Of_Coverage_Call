@@ -595,7 +595,8 @@ int main (int argc, char *argv[])
 
   NS_LOG_INFO ("Simulation time " << simTime << " s");
   NS_LOG_INFO ("Starting simulation...");
-
+  AnimationInterface anim("sl_relay.xml");
+  anim.SetMaxPktsPerTraceFile(500000);
   Simulator::Stop (Seconds (simTime));
   Simulator::Run ();
 
