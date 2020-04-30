@@ -77,8 +77,8 @@ public:
 int main (int argc, char *argv[])
 {
    
- // MCPTT configuration
- //variable declarations for using push to talk 
+// MCPTT configuration
+//variable declarations for using push to talk 
 uint32_t appCount;
 uint32_t groupcount = 1;
 uint32_t usersPerGroup = 5;
@@ -119,21 +119,22 @@ TracedCallback<uint32_t, uint32_t, const std::string&, const std::string&, const
 //bool m_userAckReq; //!< Indicates if user acknowledgments are required.
 Time delayTfb1 = Seconds(5);
 
-//method declarations 
- //building environment
+
+//Physical layer 
+
 //creating 3 nodes
 NodeContainer nodes;
 nodes.Create (appCount);
 
+//positioning nodes
+NS_LOG_INFO ("Building physical topology...");
+Ptr<RandomBoxPositionAllocator> rndBoxPosAllocator = CreateObject <RandomBoxPositionAllocator> ();
+rndBoxPosAllocator->SetX (CreateObjectWithAttributes<UniformRandomVariable> ("Min", DoubleValue (0.0), "Max", DoubleValue (maxX)));
+rndBoxPosAllocator->SetY (CreateObjectWithAttributes<UniformRandomVariable> ("Min", DoubleValue (0.0), "Max", DoubleValue (maxY)));
+rndBoxPosAllocator->SetZ (CreateObjectWithAttributes<ConstantRandomVariable> ("Constant", DoubleValue (1.5)));
 
-  NS_LOG_INFO ("Building physical topology...");
-  Ptr<RandomBoxPositionAllocator> rndBoxPosAllocator = CreateObject <RandomBoxPositionAllocator> ();
-  rndBoxPosAllocator->SetX (CreateObjectWithAttributes<UniformRandomVariable> ("Min", DoubleValue (0.0), "Max", DoubleValue (maxX)));
-  rndBoxPosAllocator->SetY (CreateObjectWithAttributes<UniformRandomVariable> ("Min", DoubleValue (0.0), "Max", DoubleValue (maxY)));
-  rndBoxPosAllocator->SetZ (CreateObjectWithAttributes<ConstantRandomVariable> ("Constant", DoubleValue (1.5)));
 
-  //allocating position of nodes 
-  Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
+Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
   for (uint32_t count = 0; count < appCount; count++)
     {
       Vector position = rndBoxPosAllocator->GetNext ();
@@ -144,92 +145,94 @@ nodes.Create (appCount);
     }
   
 
-  //mobility of nodes set to stationary
-  MobilityHelper mobility;
-  mobility.SetPositionAllocator (positionAlloc);
-  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-  mobility.Install (nodes);
+//mobility of nodes set to stationary
+MobilityHelper mobility;
+mobility.SetPositionAllocator (positionAlloc);
+mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+mobility.Install (nodes);
 
+//sidelink pre-configuration
 //Configure the UE for UE_SELECTED scenario
-  Config::SetDefault ("ns3::LteUeMac::SlGrantMcs", UintegerValue (16));
-  Config::SetDefault ("ns3::LteUeMac::SlGrantSize", UintegerValue (5)); //The number of RBs allocated per UE for Sidelink
-  Config::SetDefault ("ns3::LteUeMac::Ktrp", UintegerValue (1));
-  Config::SetDefault ("ns3::LteUeMac::UseSetTrp", BooleanValue (true)); //use default Trp index of 0
+Config::SetDefault ("ns3::LteUeMac::SlGrantMcs", UintegerValue (16));
+Config::SetDefault ("ns3::LteUeMac::SlGrantSize", UintegerValue (5)); //The number of RBs allocated per UE for Sidelink
+Config::SetDefault ("ns3::LteUeMac::Ktrp", UintegerValue (1));
+Config::SetDefault ("ns3::LteUeMac::UseSetTrp", BooleanValue (true)); //use default Trp index of 0
 
-  //Set the frequency
-  uint32_t ulEarfcn = 18100;
-  uint16_t ulBandwidth = 50;
+//Set the frequency
+uint32_t ulEarfcn = 18100;
+uint16_t ulBandwidth = 50;
 
-  // Set error models
-  Config::SetDefault ("ns3::LteSpectrumPhy::SlCtrlErrorModelEnabled", BooleanValue (true));
-  Config::SetDefault ("ns3::LteSpectrumPhy::SlDataErrorModelEnabled", BooleanValue (true));
-  Config::SetDefault ("ns3::LteSpectrumPhy::DropRbOnCollisionEnabled", BooleanValue (false));
+// Set error models
+Config::SetDefault ("ns3::LteSpectrumPhy::SlCtrlErrorModelEnabled", BooleanValue (true));
+Config::SetDefault ("ns3::LteSpectrumPhy::SlDataErrorModelEnabled", BooleanValue (true));
+Config::SetDefault ("ns3::LteSpectrumPhy::DropRbOnCollisionEnabled", BooleanValue (false));
   
-  //Set the UEs power in dBm
-  Config::SetDefault ("ns3::LteUePhy::TxPower", DoubleValue (23.0));
+//Set the UEs power in dBm
+Config::SetDefault ("ns3::LteUePhy::TxPower", DoubleValue (23.0));
 
-  //cmd.AddValue ("simTime", "Total duration of the simulation", simTime);
-  //cmd.AddValue ("enableNsLogs", "Enable ns-3 logging (debug builds)", enableNsLogs);
-  //cmd.Parse (argc, argv);
+//cmd.AddValue ("simTime", "Total duration of the simulation", simTime);
+//cmd.AddValue ("enableNsLogs", "Enable ns-3 logging (debug builds)", enableNsLogs);
+//cmd.Parse (argc, argv);
 
-  //Sidelink bearers activation time
-  //Time slBearersActivationTime = startTime;
+//Sidelink bearers activation time
+//Time slBearersActivationTime = startTime;
 
-  //Create the helpers
-  Ptr<LteHelper> lteHelper = CreateObject<LteHelper> ();
+//Create the helpers
+Ptr<LteHelper> lteHelper = CreateObject<LteHelper> ();
 
-  //Create and set the EPC helper
-  //Ptr<PointToPointEpcHelper>  epcHelper = CreateObject<PointToPointEpcHelper> ();
-  //lteHelper->SetEpcHelper (epcHelper);
+//Create and set the EPC helper
+//Ptr<PointToPointEpcHelper>  epcHelper = CreateObject<PointToPointEpcHelper> ();
+//lteHelper->SetEpcHelper (epcHelper);
 
-  ////Create Sidelink helper and set lteHelper
-  Ptr<LteSidelinkHelper> proseHelper = CreateObject<LteSidelinkHelper> ();
-  proseHelper->SetLteHelper (lteHelper);
-  Config::SetDefault ("ns3::LteSlBasicUeController::ProseHelper",PointerValue (proseHelper));
+//Create Sidelink helper and set lteHelper
+Ptr<LteSidelinkHelper> proseHelper = CreateObject<LteSidelinkHelper> ();
+proseHelper->SetLteHelper (lteHelper);
+Config::SetDefault ("ns3::LteSlBasicUeController::ProseHelper",PointerValue (proseHelper));
 
-  //Enable Sidelink
-  lteHelper->SetAttribute ("UseSidelink", BooleanValue (true));
+//Enable Sidelink
+lteHelper->SetAttribute ("UseSidelink", BooleanValue (true));
 
-  //Set pathloss model
-  lteHelper->SetAttribute ("PathlossModel", StringValue ("ns3::Cost231PropagationLossModel"));
-  // channel model initialization
-  lteHelper->Initialize ();
+//Set pathloss model
+lteHelper->SetAttribute ("PathlossModel", StringValue ("ns3::Cost231PropagationLossModel"));
 
-  // Since we are not installing eNB, we need to set the frequency attribute of pathloss model here
-  double ulFreq = LteSpectrumValueHelper::GetCarrierFrequency (ulEarfcn);
-  NS_LOG_LOGIC ("UL freq: " << ulFreq);
-  Ptr<Object> uplinkPathlossModel = lteHelper->GetUplinkPathlossModel ();
-  Ptr<PropagationLossModel> lossModel = uplinkPathlossModel->GetObject<PropagationLossModel> ();
-  NS_ABORT_MSG_IF (lossModel == NULL, "No PathLossModel");
-  bool ulFreqOk = uplinkPathlossModel->SetAttributeFailSafe ("Frequency", DoubleValue (ulFreq));
+// channel model initialization
+lteHelper->Initialize ();
+
+// Since we are not installing eNB, we need to set the frequency attribute of pathloss model here
+double ulFreq = LteSpectrumValueHelper::GetCarrierFrequency (ulEarfcn);
+NS_LOG_LOGIC ("UL freq: " << ulFreq);
+Ptr<Object> uplinkPathlossModel = lteHelper->GetUplinkPathlossModel ();
+Ptr<PropagationLossModel> lossModel = uplinkPathlossModel->GetObject<PropagationLossModel> ();
+NS_ABORT_MSG_IF (lossModel == NULL, "No PathLossModel");
+bool ulFreqOk = uplinkPathlossModel->SetAttributeFailSafe ("Frequency", DoubleValue (ulFreq));
   if (!ulFreqOk)
     {
       NS_LOG_WARN ("UL propagation model does not have a Frequency attribute");
     }
 
-    // NetDeviceContainer devices = lteHelper->InstallUeDevice (nodes);
+//NetDeviceContainer devices = lteHelper->InstallUeDevice (nodes);
+Ptr<LteSlUeRrc> ueSidelinkConfiguration = CreateObject<LteSlUeRrc> ();
+ueSidelinkConfiguration->SetSlEnabled (true);
 
-  //Sidelink pre-configuration for the UEs
-  Ptr<LteSlUeRrc> ueSidelinkConfiguration = CreateObject<LteSlUeRrc> ();
-  ueSidelinkConfiguration->SetSlEnabled (true);
+LteRrcSap::SlPreconfiguration preconfiguration;
 
-  LteRrcSap::SlPreconfiguration preconfiguration;
+preconfiguration.preconfigGeneral.carrierFreq = ulEarfcn;
+preconfiguration.preconfigGeneral.slBandwidth = ulBandwidth;
+preconfiguration.preconfigComm.nbPools = 1;
 
-  preconfiguration.preconfigGeneral.carrierFreq = ulEarfcn;
-  preconfiguration.preconfigGeneral.slBandwidth = ulBandwidth;
-  preconfiguration.preconfigComm.nbPools = 1;
-  //-Configure preconfigured communication pool
-  preconfiguration.preconfigComm = proseHelper->GetDefaultSlPreconfigCommPoolList ();
-  //-Configure preconfigured discovery pool
-  preconfiguration.preconfigDisc = proseHelper->GetDefaultSlPreconfigDiscPoolList ();
+//-Configure preconfigured communication pool
+preconfiguration.preconfigComm = proseHelper->GetDefaultSlPreconfigCommPoolList ();
 
-  //-Configure preconfigured UE-to-Network Relay parameters
-  preconfiguration.preconfigRelay = proseHelper->GetDefaultSlPreconfigRelay ();
+//-Configure preconfigured discovery pool
+preconfiguration.preconfigDisc = proseHelper->GetDefaultSlPreconfigDiscPoolList ();
+
+//-Configure preconfigured UE-to-Network Relay parameters
+preconfiguration.preconfigRelay = proseHelper->GetDefaultSlPreconfigRelay ();
   
-  //-Enable discovery
-  ueSidelinkConfiguration->SetDiscEnabled (true);
-  //-Set frequency for discovery messages monitoring
-  //ueSidelinkConfiguration->SetDiscInterFreq (ueDevs.Get (0)->GetObject<LteEnbNetDevice> ()->GetUlEarfcn ());
+//-Enable discovery
+ueSidelinkConfiguration->SetDiscEnabled (true);
+//-Set frequency for discovery messages monitoring //this is for another scenario with remote host
+//ueSidelinkConfiguration->SetDiscInterFreq (ueDevs.Get (0)->GetObject<LteEnbNetDevice> ()->GetUlEarfcn ());
   
 LteRrcSap::SlCommTxResourcesSetup pool;
 pool.setup = LteRrcSap::SlCommTxResourcesSetup::UE_SELECTED;
@@ -238,72 +241,73 @@ pool.ueSelected.havePoolToAdd = true;
 pool.ueSelected.poolToAddModList.nbPools = 1;
 pool.ueSelected.poolToAddModList.pools[0].poolIdentity = 1;
 
+LteSlPreconfigPoolFactory pfactory;
 
-  LteSlPreconfigPoolFactory pfactory;
+//Control
+pfactory.SetControlPeriod ("sf40");
+pfactory.SetControlBitmap (0x00000000FF); //8 subframes for PSCCH
+pfactory.SetControlOffset (0);
+pfactory.SetControlPrbNum (22);
+pfactory.SetControlPrbStart (0);
+pfactory.SetControlPrbEnd (49);
 
-  //Control
-  pfactory.SetControlPeriod ("sf40");
-  pfactory.SetControlBitmap (0x00000000FF); //8 subframes for PSCCH
-  pfactory.SetControlOffset (0);
-  pfactory.SetControlPrbNum (22);
-  pfactory.SetControlPrbStart (0);
-  pfactory.SetControlPrbEnd (49);
+//Data
+pfactory.SetDataBitmap (0xFFFFFFFFFF);
+pfactory.SetDataOffset (8); //After 8 subframes of PSCCH
+pfactory.SetDataPrbNum (25);
+pfactory.SetDataPrbStart (0);
+pfactory.SetDataPrbEnd (49);
 
-  //Data
-  pfactory.SetDataBitmap (0xFFFFFFFFFF);
-  pfactory.SetDataOffset (8); //After 8 subframes of PSCCH
-  pfactory.SetDataPrbNum (25);
-  pfactory.SetDataPrbStart (0);
-  pfactory.SetDataPrbEnd (49);
+//synchronization
 
-  preconfiguration.preconfigComm.pools[0] = pfactory.CreatePool ();
-  pfactory.SetHaveUeSelectedResourceConfig (true);
+preconfiguration.preconfigComm.pools[0] = pfactory.CreatePool ();
+pfactory.SetHaveUeSelectedResourceConfig (true);
+    
+NetDeviceContainer devices;
+ueSidelinkConfiguration->SetSlPreconfiguration (preconfiguration);
+lteHelper->InstallSidelinkConfiguration (devices, ueSidelinkConfiguration);
   
-  
-  NetDeviceContainer devices;
-  ueSidelinkConfiguration->SetSlPreconfiguration (preconfiguration);
-  lteHelper->InstallSidelinkConfiguration (devices, ueSidelinkConfiguration);
-  
+/*Network layer***************************************************************************************/
 //installing wifi interface in nodes
-  WifiHelper wifi;
-  wifi.SetStandard (WIFI_PHY_STANDARD_80211g); //2.4Ghz
-  wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager",
+WifiHelper wifi;
+wifi.SetStandard (WIFI_PHY_STANDARD_80211g); //2.4Ghz
+wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager",
                                 "DataMode", StringValue ("ErpOfdmRate54Mbps"));
  
-  WifiMacHelper wifiMac;
-  YansWifiPhyHelper wifiPhy = YansWifiPhyHelper::Default ();
-  YansWifiChannelHelper wifiChannel;
-  wifiChannel.SetPropagationDelay ("ns3::ConstantSpeedPropagationDelayModel");
-  wifiChannel.AddPropagationLoss ("ns3::FriisPropagationLossModel",
+WifiMacHelper wifiMac;
+YansWifiPhyHelper wifiPhy = YansWifiPhyHelper::Default ();
+YansWifiChannelHelper wifiChannel;
+wifiChannel.SetPropagationDelay ("ns3::ConstantSpeedPropagationDelayModel");
+wifiChannel.AddPropagationLoss ("ns3::FriisPropagationLossModel",
                                 "Frequency", DoubleValue (2.407e9)); //2.4Ghz
 
-  wifiMac.SetType ("ns3::AdhocWifiMac");
+wifiMac.SetType ("ns3::AdhocWifiMac");
 
-  YansWifiPhyHelper phy = wifiPhy;
-  phy.SetChannel (wifiChannel.Create ());
+YansWifiPhyHelper phy = wifiPhy;
+phy.SetChannel (wifiChannel.Create ());
 
-  WifiMacHelper mac = wifiMac;
-  //NetDeviceContainer
-  devices = wifi.Install (phy, mac, nodes);
+WifiMacHelper mac = wifiMac;
+devices = wifi.Install (phy, mac, nodes);
 
-  //installing internet access to all nodes
-  NS_LOG_INFO ("Installing internet stack on all nodes...");
-  InternetStackHelper internet;
-  internet.Install (nodes);
+//installing internet access to all nodes
+NS_LOG_INFO ("Installing internet stack on all nodes...");
+InternetStackHelper internet;
+internet.Install (nodes);
   
-  // assigning ip addresses to all devices of nodes
-  NS_LOG_INFO ("Assigning IP addresses to each net device...");
-  Ipv4AddressHelper ipv4;
-  ipv4.SetBase ("10.1.1.0", "255.255.255.0");
-  Ipv4InterfaceContainer i = ipv4.Assign (devices);
+// assigning ip addresses to all devices of nodes
+NS_LOG_INFO ("Assigning IP addresses to each net device...");
+Ipv4AddressHelper ipv4;
+ipv4.SetBase ("10.1.1.0", "255.255.255.0");
+Ipv4InterfaceContainer i = ipv4.Assign (devices);
 
-  NS_LOG_INFO ("Creating applications...");
+/*Application layer*************************************************************************************/
 
-  //creating mcptt application for each device 
+NS_LOG_INFO ("Creating applications...");
+//creating mcptt application for each device 
  
-  ApplicationContainer clientApps;
-  McpttHelper mcpttHelper;
-  McpttTimer mcpttTimer;
+ApplicationContainer clientApps;
+McpttHelper mcpttHelper;
+McpttTimer mcpttTimer;
   
   //creating mcptt service on each node
   clientApps.Add (mcpttHelper.Install (nodes));
@@ -327,6 +331,7 @@ pool.ueSelected.poolToAddModList.pools[0].poolIdentity = 1;
                          "Variance", DoubleValue (releaseTimeVariance));
 
 
+/*Call flow process************************************************************************************/
 
  //floor request
  /*
@@ -367,50 +372,21 @@ pool.ueSelected.poolToAddModList.pools[0].poolIdentity = 1;
 
   Ipv4AddressValue grpAddr;
 
-
-  
-  //Amachine.SetAttribute("ns3::A device owner", m_owner);
-  //Amachine.SetOwner(m_owner);
-  //Amachine.SetCallId(m_callId);
-  //Amachine.SetCallType(m_callType);
-  //Amachine.SetDelayTfb1(delayTfb1);
-
-  //call->OpenFloorChan (grpAddr.Get (), m_floorPort);
-  //call->OpenMediaChan (grpAddr.Get (), m_mediaPort);
-
-  //floorMachine->Start ();
-
   //creating location to store application info of UEs A, B 
   Ptr<McpttPttApp> ueAPttApp = DynamicCast<McpttPttApp, Application> (clientApps.Get (0));
   Ptr<McpttPttApp> ueBPttApp = DynamicCast<McpttPttApp, Application> (clientApps.Get (1));
   
-   
-
-
-  
-  //Ptr<BroadcastTestCallMachine> ueBMachine = DynamicCast<BroadcastTestCallMachine, McpttCallMachine> (GetCallMachine (1));
-  //Ptr<BroadcastTestCallMachine> ueCMachine = DynamicCast<BroadcastTestCallMachine, McpttCallMachine> (GetCallMachine (2));
-
-  //Ptr<McpttTimer> ueATfb1 = ueAMachine->GetTfb1 ();
-  //Ptr<McpttTimer> ueATfb2 = ueAMachine->GetTfb2 ();
-  //Ptr<McpttTimer> ueBTfb1 = ueBMachine->GetTfb1 ();
-  //Ptr<McpttTimer> ueCTfb1 = ueCMachine->GetTfb1 ();
-
-  //ueAPttApp = ueACall->GetOwner ();
-  //Ptr<McpttFloorMachine> floorMachine = ueACall->GetFloorMachine ();
-  //Ptr<McpttCallMachineGrpBroadcast> Amachine = ueACall->GetCallMachine ();
-
-
- //push button press schedule
- Simulator::Schedule (Seconds (1.1), &McpttPttApp::TakePushNotification, ueAPttApp);
+  //push button press schedule
+  Simulator::Schedule (Seconds (1.1), &McpttPttApp::TakePushNotification, ueAPttApp);
  
-   McpttCallMachineGrpBroadcast machines;
+  McpttCallMachineGrpBroadcast machines;
  
- // generate call 
+  // generate call 
   ueAPttApp->CreateCall (callFac, floorFac);
   ueAPttApp->SelectLastCall ();
   ueBPttApp->CreateCall (callFac, floorFac);
   ueBPttApp->SelectLastCall ();
+  
   //creating call interfaces and location to store call of UEs A, B 
   Ptr<McpttCall> ueACall = ueAPttApp->GetSelectedCall ();
   Ptr<McpttCall> ueBCall = ueBPttApp->GetSelectedCall ();
@@ -425,7 +401,6 @@ pool.ueSelected.poolToAddModList.pools[0].poolIdentity = 1;
   Ptr<McpttMediaSrc> ueAMediaSrc = ueAPttApp->GetMediaSrc ();
   Ptr<McpttMediaSrc> ueBMediaSrc = ueBPttApp->GetMediaSrc ();
 
-
   McpttCallMachineGrpBroadcast broadcastMachines;
   broadcastMachines.SetDelayTfb1(delayTfb1);
   broadcastMachines.SetDelayTfb2(delayTfb1);
@@ -434,15 +409,16 @@ pool.ueSelected.poolToAddModList.pools[0].poolIdentity = 1;
   Ptr<McpttTimer> tfb2 =broadcastMachines.GetTfb2();
   Ptr<McpttTimer> tfb3 =broadcastMachines.GetTfb3();
   Simulator::Schedule (Seconds (2.1), &McpttTimer::Start, tfb1);
+
   //Ptr<McpttTimer> ueATfb1 = ueAMachine->GetTfb1 ();
   Ptr<Packet> pkt = Create<Packet> ();
 
   pkt->AddHeader (msg);
-
+  //callChan->Send (pkt);
+ 
   NS_LOG_LOGIC (Simulator::Now ().GetSeconds () << "s: PttApp sending " << msg << ".");
   
 
-  //callChan->Send (pkt);
 
   //send call 
    
@@ -454,13 +430,12 @@ pool.ueSelected.poolToAddModList.pools[0].poolIdentity = 1;
  
   //mcpttTimer.SetDelay(Seconds(10));
   
-  // uint16_t floorPort = McpttPttApp::AllocateNextPortNumber ();
-  //uint16_t speechPort = McpttPttApp::AllocateNextPortNumber ();
-  //Ipv4AddressValue grpAddress;
+  uint16_t floorPort = McpttPttApp::AllocateNextPortNumber ();
+  uint16_t speechPort = McpttPttApp::AllocateNextPortNumber ();
+  Ipv4AddressValue grpAddress;
 
-  //Simulator::Schedule (Seconds (5), &McpttTimer::Start,ueATfb1);
-  //Simulator::Schedule (Seconds (5.15), &McpttCall::OpenFloorChan, ueACall, grpAddress.Get (), floorPort);
-  //Simulator::Schedule (Seconds (5.15), &McpttCall::OpenMediaChan, ueACall, grpAddress.Get (), speechPort);
+  Simulator::Schedule (Seconds (5.15), &McpttCall::OpenFloorChan, ueACall, grpAddress.Get (), floorPort);
+  Simulator::Schedule (Seconds (5.15), &McpttCall::OpenMediaChan, ueACall, grpAddress.Get (), speechPort);
   //Simulator::Schedule (Seconds (5.15), &McpttCall::OpenFloorChan, ueBCall, grpAddress.Get (), floorPort);
   //Simulator::Schedule (Seconds (5.15), &McpttCall::OpenMediaChan, ueBCall, grpAddress.Get (), speechPort);
   
