@@ -19,6 +19,8 @@
 #include <ns3/mcptt-ptt-app.h>
 #include <ns3/mcptt-timer.h>
 #include <iostream>
+#include <ns3/mcptt-floor-msg.h>
+#include <ns3/mcptt-floor-msg-field.h>
 
 using namespace ns3;
 //using namespace psc;
@@ -304,7 +306,7 @@ NS_LOG_INFO ("Assigning IP addresses to each net device...");
 Ipv4AddressHelper ipv4;
 ipv4.SetBase ("10.1.1.0", "255.255.255.0");
 Ipv4InterfaceContainer i = ipv4.Assign (devices);
-
+ ns3::PacketMetadata::Enable ();
 /*Application layer*************************************************************************************/
 
 NS_LOG_INFO ("Creating applications...");
@@ -340,7 +342,9 @@ McpttTimer mcpttTimer;
 
 //set call owner, call id, mcptt id, call type, etc.**************************************
 
-  //create floor and call control machines************************************************ 
+
+
+//create floor and call control machines************************************************ 
 ObjectFactory callFac;
 callFac.SetTypeId ("ns3::McpttCallMachineGrpBroadcast");
 
@@ -372,8 +376,23 @@ Ptr<McpttCall> ueACall = ueAPttApp->GetSelectedCall ();
 Ptr<McpttCall> ueBCall = ueBPttApp->GetSelectedCall ();
 Ptr<McpttChan> callChan = ueAPttApp->GetCallChan ();
   
-Ptr<McpttCallMachine> ueAMachine = ueACall->GetCallMachine ();
-Ptr<McpttCallMachine> ueBMachine = ueBCall->GetCallMachine ();
+//Ptr<McpttCallMachine> ueAMachine = ueACall->GetCallMachine ();
+Ptr<McpttCallMachineGrpBroadcast> Abroadcastgroup = DynamicCast<McpttCallMachineGrpBroadcast, McpttCallMachine>(ueACall->GetCallMachine ());
+Ptr<McpttCallMachineGrpBroadcast> Bbroadcastgroup =  DynamicCast<McpttCallMachineGrpBroadcast, McpttCallMachine>(ueBCall->GetCallMachine ());;
+
+//Ptr<McpttPttApp> ueBPttApp = DynamicCast<McpttPttApp, Application> (clientApps.Get (1));
+  uint32_t grpId = 1;
+  uint16_t callId = 1;
+  uint32_t origId = ueAPttApp->GetUserId ();
+  McpttCallMsgFieldSdp sdp;
+  // UE A
+  Abroadcastgroup->SetCallId (callId);
+  Abroadcastgroup->SetGrpId (grpId);
+  Abroadcastgroup->SetOrigId (origId);
+  Abroadcastgroup->SetSdp (sdp);
+  Abroadcastgroup->SetCallType (McpttCallMsgFieldCallType::BROADCAST_GROUP);
+  Abroadcastgroup->SetPriority (McpttCallMsgFieldCallType::GetCallTypePriority (McpttCallMsgFieldCallType::BROADCAST_GROUP));
+  //Abroadcastgroup->SetStartState (McpttCallMachineGrpBroadcastStateB2::GetInstance ());
 
 Ptr<McpttPusher> ueAPusher = ueAPttApp->GetPusher ();
 Ptr<McpttPusher> ueBPusher = ueBPttApp->GetPusher ();
@@ -391,6 +410,55 @@ Ptr<McpttTimer> tfb3 =broadcastMachines.GetTfb3();
 
 Simulator::Schedule (Seconds (5.15), &McpttCall::OpenFloorChan, ueACall, grpAddress.Get (), floorPort);
 //Simulator::Schedule (Seconds (5.15), &McpttCall::OpenFloorChan, ueBCall, grpAddress.Get (), floorPort);
+
+/*McpttCallMsgGrpEmergAlert::McpttCallMsgGrpEmergAlert (void)
+  : McpttCallMsg (McpttCallMsgGrpEmergAlert::CODE),
+    m_grpId (McpttCallMsgFieldGrpId ()),
+    m_orgName (McpttCallMsgFieldOrgName ()),
+    m_userId (McpttCallMsgFieldUserId ()),
+    m_userLoc (McpttCallMsgFieldUserLoc ());
+
+*/
+  
+  //floor request generate
+  //
+  McpttFloorMsgFieldIndic indic = McpttFloorMsgFieldIndic ();
+  indic.Indicate (McpttFloorMsgFieldIndic::BROADCAST_CALL);
+
+  McpttFloorMsgFieldPriority priority = McpttFloorMsgFieldPriority ();
+  priority.SetPriority (1);
+
+  McpttFloorMsgFieldTrackInfo trackInfo = McpttFloorMsgFieldTrackInfo ();
+  trackInfo.SetQueueCap (1);
+  trackInfo.AddRef (5);
+
+  McpttFloorMsgFieldUserId id = McpttFloorMsgFieldUserId ();
+  id.SetUserId (9);
+
+  McpttFloorMsgRequest dstMsg;
+  McpttFloorMsgRequest srcMsg;
+
+  srcMsg.SetIndicator (indic);
+  srcMsg.SetPriority (priority);
+  srcMsg.UpdateTrackInfo (trackInfo);
+  srcMsg.SetUserId (id);
+
+  Ptr<Packet> p = Create<Packet> ();
+  p->AddHeader (srcMsg);
+  p->RemoveHeader(dstMsg);
+  //callChan->Send (p);
+
+  std::stringstream dstStr;
+  std::stringstream srcStr;
+
+  dstMsg.Print (dstStr);
+  srcMsg.Print (srcStr);
+  
+
+  //floor granted to A
+  McpttFloorMachineBasic Amachinefloor;
+  Amachinefloor.HasFloor() ;
+  
 
  /*
  McpttFloorMsgRequest::McpttFloorMsgRequest (uint32_t ssrc)
@@ -417,7 +485,7 @@ Simulator::Schedule (Seconds (5.15), &McpttCall::OpenFloorChan, ueACall, grpAddr
 }
  */
 
-//receive floor granted******************************* 
+//******************************* 
        
 //send floor control info (SCI) share to all participants**************
 
@@ -425,6 +493,7 @@ Simulator::Schedule (Seconds (5.15), &McpttCall::OpenFloorChan, ueACall, grpAddr
 
 
 //generate message************************************ 
+
 //Ptr<McpttTimer> ueATfb1 = ueAMachine->GetTfb1 ();
 Ptr<Packet> pkt = Create<Packet> ();
 pkt->AddHeader (msg);
@@ -451,6 +520,14 @@ Simulator::Schedule (Seconds (3.0), &McpttPttApp::ReleaseCall, ueAPttApp);
 
 
 //Result generation*******************************************
+
+  //Packets traces
+  AsciiTraceHelper ascii;
+  Ptr<OutputStreamWrapper> stream = ascii.CreateFileStream ("b20.tr");
+  wifiPhy.EnableAsciiAll (stream);
+  internet.EnableAsciiIpv4All (stream);
+
+
 NS_LOG_INFO ("Enabling MCPTT traces...");
 mcpttHelper.EnableMsgTraces ();
 mcpttHelper.EnableStateMachineTraces ();
@@ -459,7 +536,6 @@ NS_LOG_INFO ("Starting simulation...");
 AnimationInterface anim("b20.xml");
 anim.SetMaxPktsPerTraceFile(500000);
 
-std::cout << "okay 4" << "\n" ;
 //Simulator::Stop (Seconds (stopTime));
 //anim.SetConstantPosition(nodes.Get(0),1.0,2.0);
 //anim.SetConstantPosition(nodes.Get(1),4.0,5.0);
