@@ -450,6 +450,8 @@ Ptr<McpttCallMachineGrpBroadcast> Cbroadcastgroupmachine =  DynamicCast<McpttCal
 
 
 //push button press schedule
+
+
   Simulator::Schedule (Seconds (2.2), &McpttPttApp::TakePushNotification, ueAPttApp);
   McpttCallMachineGrpBroadcastStateB1::GetStateId ();
 
@@ -563,6 +565,8 @@ Ptr<McpttCallMachineGrpBroadcastState> stateC = CbroadcastMachines.GetState ();
 
   McpttCallMsgFieldUserId lastChgUserId;
   lastChgUserId.SetId (15);
+ //SetUserLoc (const McpttCallMsgFieldUserLoc& userLoc)*************
+
 
 //******************************* 
        
@@ -598,7 +602,20 @@ Simulator::Schedule (Seconds (2.1), &McpttTimer::Start, Ctfb1);
   Simulator::Schedule (Seconds (2.15), &McpttCall::OpenMediaChan, ueCCall, grpAddress.Get (), speechPort);
   
 //// synchronization and call in progress 
+
+
+//end call
  Simulator::Schedule (Seconds (5.25), &McpttPttApp::ReleaseCall, ueAPttApp);
+
+//broadcast end message
+McpttCallMsgGrpBroadcastEnd Endmsg;
+//B, C receive end message
+BbroadcastMachines.ReceiveGrpCallBroadcastEnd(Endmsg);
+CbroadcastMachines.ReceiveGrpCallBroadcastEnd(Endmsg);
+  Simulator::Schedule (Seconds (5.25), &McpttTimer::Stop, Atfb1);
+  Simulator::Schedule (Seconds (5.25), &McpttTimer::Stop, Atfb2);
+    Simulator::Schedule (Seconds (5.25), &McpttTimer::Stop, Btfb1);
+Simulator::Schedule (Seconds (5.25), &McpttTimer::Stop, Ctfb1);
 
 //Result generation*******************************************
 
