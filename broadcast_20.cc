@@ -314,7 +314,7 @@ NS_LOG_INFO ("Assigning IP addresses to each net device...");
 Ipv4AddressHelper ipv4;
 ipv4.SetBase ("10.1.1.0", "255.255.255.0");
 Ipv4InterfaceContainer i = ipv4.Assign (devices);
- ns3::PacketMetadata::Enable ();
+ns3::PacketMetadata::Enable ();
 /*Application layer*************************************************************************************/
 
 NS_LOG_INFO ("Creating applications...");
@@ -368,10 +368,25 @@ Ptr<McpttPttApp> ueCPttApp = DynamicCast<McpttPttApp, Application> (clientApps.G
 
   //UE A
   uint32_t grpId = 1;
-  uint16_t AcallId = 1;
-  uint32_t AorigId = ueAPttApp->GetUserId ();
-  McpttCallMsgFieldSdp sdp;
+  uint16_t callId = 1;
   
+
+
+  //UE B 
+  
+  
+  std::string orgName = "EMS";
+  Time joinTime = Seconds (2.2);
+  uint32_t origId = ueAPttApp->GetUserId ();
+  Ipv4Address origAddress = ueBPttApp->GetLocalAddress ();
+
+  ueBPttApp->GetAttribute ("PeerAddress", grpAddress);
+
+  McpttCallMsgFieldSdp sdp;
+  sdp.SetFloorPort (floorPort);
+  sdp.SetGrpAddr (grpAddress.Get ());
+  sdp.SetOrigAddr (origAddress);
+  sdp.SetSpeechPort (speechPort);
     //UE A
  
   //uint16_t BcallId = 2;
@@ -402,37 +417,50 @@ Ptr<McpttCall> ueCCall = ueCPttApp->GetSelectedCall ();
 Ptr<McpttCallMachineGrpBroadcast> Abroadcastgroupmachine = DynamicCast<McpttCallMachineGrpBroadcast, McpttCallMachine>(ueACall->GetCallMachine ());
 Ptr<McpttCallMachineGrpBroadcast> Bbroadcastgroupmachine =  DynamicCast<McpttCallMachineGrpBroadcast, McpttCallMachine>(ueBCall->GetCallMachine ());
 Ptr<McpttCallMachineGrpBroadcast> Cbroadcastgroupmachine =  DynamicCast<McpttCallMachineGrpBroadcast, McpttCallMachine>(ueBCall->GetCallMachine ());
-/*
-  Abroadcastgroupmachine->SetDelayTfb1(delayTfb1);
-  Abroadcastgroupmachine->SetDelayTfb2(delayTfb2);
-  Abroadcastgroupmachine->SetDelayTfb3(delayTfb3);
 
-  Bbroadcastgroupmachine->SetDelayTfb1(delayTfb1);
-  Bbroadcastgroupmachine->SetDelayTfb2(delayTfb2);
-  Bbroadcastgroupmachine->SetDelayTfb3(delayTfb3);
 
-  Cbroadcastgroupmachine->SetDelayTfb1(delayTfb1);
-  Cbroadcastgroupmachine->SetDelayTfb2(delayTfb2);
-  Cbroadcastgroupmachine->SetDelayTfb3(delayTfb3);
+  //UE A 
+  Abroadcastgroupmachine->SetCallId (callId);
+  Abroadcastgroupmachine->SetGrpId (grpId);
+  Abroadcastgroupmachine->SetOrigId (origId);
+  Abroadcastgroupmachine->SetSdp (sdp);
+  Abroadcastgroupmachine->SetCallType (McpttCallMsgFieldCallType::BROADCAST_GROUP);
+  Abroadcastgroupmachine->SetPriority (McpttCallMsgFieldCallType::GetCallTypePriority (McpttCallMsgFieldCallType::BROADCAST_GROUP));
+  McpttCallMachineGrpBroadcastStateB2::GetInstance ();
 
-Ptr<McpttTimer> Atfb1  = Abroadcastgroupmachine->GetTfb1();
-Ptr<McpttTimer> Btfb1  = Bbroadcastgroupmachine->GetTfb1();
-Ptr<McpttTimer> Ctfb1  = Cbroadcastgroupmachine->GetTfb1();
-Ptr<McpttTimer> Atfb2  = Abroadcastgroupmachine->GetTfb2();
-*/
+ 
+    // UE B
+  Bbroadcastgroupmachine ->SetCallId (callId);
+  Bbroadcastgroupmachine ->SetGrpId (grpId);
+  Bbroadcastgroupmachine ->SetOrigId (origId);
+  Bbroadcastgroupmachine ->SetSdp (sdp);
+  Bbroadcastgroupmachine ->SetCallType (McpttCallMsgFieldCallType::BROADCAST_GROUP);
+  Bbroadcastgroupmachine ->SetPriority (McpttCallMsgFieldCallType::GetCallTypePriority (McpttCallMsgFieldCallType::BROADCAST_GROUP));
+  McpttCallMachineGrpBroadcastStateB2::GetInstance ();
+ 
+
+      // UE C
+  Cbroadcastgroupmachine ->SetCallId (callId);
+  Cbroadcastgroupmachine ->SetGrpId (grpId);
+  Cbroadcastgroupmachine ->SetOrigId (origId);
+  Cbroadcastgroupmachine ->SetSdp (sdp);
+  Cbroadcastgroupmachine ->SetCallType (McpttCallMsgFieldCallType::BROADCAST_GROUP);
+  Cbroadcastgroupmachine ->SetPriority (McpttCallMsgFieldCallType::GetCallTypePriority (McpttCallMsgFieldCallType::BROADCAST_GROUP));
+  McpttCallMachineGrpBroadcastStateB2::GetInstance ();
+
 
 //push button press schedule
-Simulator::Schedule (Seconds (2.2), &McpttPttApp::TakePushNotification, ueAPttApp);
+  Simulator::Schedule (Seconds (2.2), &McpttPttApp::TakePushNotification, ueAPttApp);
+  McpttCallMachineGrpBroadcastStateB1::GetStateId ();
 
-
-Ptr<McpttChan> AcallChan = ueAPttApp->GetCallChan ();
-Ptr<McpttChan> BcallChan = ueBPttApp->GetCallChan ();
-Ptr<McpttChan> CcallChan = ueCPttApp->GetCallChan ();
+  Ptr<McpttChan> AcallChan = ueAPttApp->GetCallChan ();
+  Ptr<McpttChan> BcallChan = ueBPttApp->GetCallChan ();
+  Ptr<McpttChan> CcallChan = ueCPttApp->GetCallChan ();
 
   // UE A
-  Abroadcastgroupmachine->SetCallId (AcallId);
+  Abroadcastgroupmachine->SetCallId (callId);
   Abroadcastgroupmachine->SetGrpId (grpId);
-  Abroadcastgroupmachine->SetOrigId (AorigId);
+  Abroadcastgroupmachine->SetOrigId (origId);
   Abroadcastgroupmachine->SetSdp (sdp);
   Abroadcastgroupmachine->SetCallType (McpttCallMsgFieldCallType::BROADCAST_GROUP);
   Abroadcastgroupmachine->SetPriority (McpttCallMsgFieldCallType::GetCallTypePriority (McpttCallMsgFieldCallType::BROADCAST_GROUP));
@@ -449,17 +477,32 @@ Ptr<McpttMediaSrc> ueBMediaSrc = ueBPttApp->GetMediaSrc ();
 Ptr<McpttMediaSrc> ueCMediaSrc = ueCPttApp->GetMediaSrc ();
 
 
-McpttCallMachineGrpBroadcast broadcastMachines;
-broadcastMachines.SetDelayTfb1(delayTfb1);
-broadcastMachines.SetDelayTfb2(delayTfb2);
-broadcastMachines.SetDelayTfb3(delayTfb3);
+McpttCallMachineGrpBroadcast AbroadcastMachines;
+AbroadcastMachines.SetDelayTfb1(delayTfb1);
+AbroadcastMachines.SetDelayTfb2(delayTfb2);
+AbroadcastMachines.SetDelayTfb3(delayTfb3);
 
-Ptr<McpttTimer> tfb1 =broadcastMachines.GetTfb1();
-Ptr<McpttTimer> tfb2 =broadcastMachines.GetTfb2();
-Ptr<McpttTimer> tfb3 =broadcastMachines.GetTfb3();
+Ptr<McpttTimer> Atfb1 =AbroadcastMachines.GetTfb1();
+Ptr<McpttTimer> Atfb2 =AbroadcastMachines.GetTfb2();
+Ptr<McpttTimer> Atfb3 =AbroadcastMachines.GetTfb3();
+Ptr<McpttCallMachineGrpBroadcastState> stateA = AbroadcastMachines.GetState ();
 
 
+McpttCallMachineGrpBroadcast BbroadcastMachines;
+BbroadcastMachines.SetDelayTfb1(delayTfb1);
+BbroadcastMachines.SetDelayTfb3(delayTfb3);
 
+Ptr<McpttTimer> Btfb1 =BbroadcastMachines.GetTfb1();
+Ptr<McpttTimer> Btfb3 =BbroadcastMachines.GetTfb3();
+Ptr<McpttCallMachineGrpBroadcastState> stateB = BbroadcastMachines.GetState ();
+
+McpttCallMachineGrpBroadcast CbroadcastMachines;
+CbroadcastMachines.SetDelayTfb1(delayTfb1);
+CbroadcastMachines.SetDelayTfb3(delayTfb3);
+
+Ptr<McpttTimer> Ctfb1 =CbroadcastMachines.GetTfb1();
+Ptr<McpttTimer> Ctfb3 =CbroadcastMachines.GetTfb3();
+Ptr<McpttCallMachineGrpBroadcastState> stateC = CbroadcastMachines.GetState ();
 
 //Simulator::Schedule (Seconds (5.15), &McpttCall::OpenFloorChan, ueBCall, grpAddress.Get (), floorPort);
 
@@ -507,7 +550,7 @@ Ptr<McpttTimer> tfb3 =broadcastMachines.GetTfb3();
   id.SetUserId (9);
   
   McpttCallMsgFieldCallId call_Id;
-  call_Id.SetCallId (AcallId);
+  call_Id.SetCallId (callId);
 
   McpttCallMsgFieldCallType callType;
   callType.SetType (McpttCallMsgFieldCallType::EMERGENCY_GROUP);
@@ -541,8 +584,12 @@ NS_LOG_LOGIC (Simulator::Now ().GetSeconds () << "s: PttApp sending " << msg << 
 //start timer TFB1 and TFB2***************************
 //establish media session***************************** 
 //release button : send call***************************
-  Simulator::Schedule (Seconds (2.1), &McpttTimer::Start, tfb1);
-  Simulator::Schedule (Seconds (2.1), &McpttTimer::Start, tfb2);
+  Simulator::Schedule (Seconds (2.1), &McpttTimer::Start, Atfb1);
+  Simulator::Schedule (Seconds (2.1), &McpttTimer::Start, Atfb2);
+    Simulator::Schedule (Seconds (2.1), &McpttTimer::Start, Btfb1);
+Simulator::Schedule (Seconds (2.1), &McpttTimer::Start, Ctfb1);
+  McpttCallMachineGrpBroadcastStateB2::GetStateId ();
+  
   Simulator::Schedule (Seconds (2.15), &McpttCall::OpenFloorChan, ueACall, grpAddress.Get (), floorPort);
   Simulator::Schedule (Seconds (2.15), &McpttCall::OpenMediaChan, ueACall, grpAddress.Get (), speechPort);
   Simulator::Schedule (Seconds (2.15), &McpttCall::OpenFloorChan, ueBCall, grpAddress.Get (), floorPort);
@@ -551,7 +598,7 @@ NS_LOG_LOGIC (Simulator::Now ().GetSeconds () << "s: PttApp sending " << msg << 
   Simulator::Schedule (Seconds (2.15), &McpttCall::OpenMediaChan, ueCCall, grpAddress.Get (), speechPort);
   
 //// synchronization and call in progress 
-Simulator::Schedule (Seconds (5.25), &McpttPttApp::ReleaseCall, ueAPttApp);
+ Simulator::Schedule (Seconds (5.25), &McpttPttApp::ReleaseCall, ueAPttApp);
 
 //Result generation*******************************************
 
