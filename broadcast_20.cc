@@ -83,7 +83,7 @@ int main (int argc, char *argv[])
 //variable declarations for using push to talk 
 uint32_t appCount;
 uint32_t groupcount = 1;
-uint32_t usersPerGroup = 5;
+uint32_t usersPerGroup =3;
 DataRate dataRate = DataRate ("24kb/s");
 uint32_t msgSize = 60; //60 + RTP header = 60 + 12 = 72
 double maxX = 5.0;
@@ -93,7 +93,7 @@ double pushTimeVariance = 2.0; // seconds
 double releaseTimeMean = 5.0; // seconds
 double releaseTimeVariance = 2.0; // seconds
 Time startTime = Seconds (1);
-Time stopTime = Seconds (15);
+Time stopTime = Seconds (30);
 TypeId socketFacTid = UdpSocketFactory::GetTypeId ();
 //uint32_t groupId = 1;
 Ipv4Address peerAddress = Ipv4Address ("255.255.255.255");
@@ -124,8 +124,9 @@ TracedCallback<uint32_t, uint32_t, const std::string&, const std::string&, const
 //Ptr<McpttTimer> m_tfb2; //!< The timer TFB2.
 //Ptr<McpttTimer> m_tfb3; //!< The timer TFB3.
 //bool m_userAckReq; //!< Indicates if user acknowledgments are required.
-Time delayTfb1 = Seconds(5);
-
+Time delayTfb1 = Seconds(10);
+Time delayTfb2 = Seconds(5);
+Time delayTfb3 = Seconds(5);
 
 //Physical layer 
 
@@ -164,6 +165,13 @@ Config::SetDefault ("ns3::LteUeMac::SlGrantMcs", UintegerValue (16));
 Config::SetDefault ("ns3::LteUeMac::SlGrantSize", UintegerValue (5)); //The number of RBs allocated per UE for Sidelink
 Config::SetDefault ("ns3::LteUeMac::Ktrp", UintegerValue (1));
 Config::SetDefault ("ns3::LteUeMac::UseSetTrp", BooleanValue (true)); //use default Trp index of 0
+
+//for tracing
+Config::SetDefault ("ns3::McpttMsgStats::CallControl", BooleanValue (true));
+Config::SetDefault ("ns3::McpttMsgStats::FloorControl", BooleanValue (true));
+Config::SetDefault ("ns3::McpttMsgStats::Media", BooleanValue (true));
+Config::SetDefault ("ns3::McpttMsgStats::IncludeMessageContent", BooleanValue (true));
+
 
 //Set the frequency
 uint32_t ulEarfcn = 18100;
@@ -329,7 +337,7 @@ McpttTimer mcpttTimer;
                          "Bytes", UintegerValue (msgSize),
                          "DataRate", DataRateValue (dataRate));
   mcpttHelper.SetPusher ("ns3::McpttPusher",
-                         "Automatic", BooleanValue (true));
+                         "Automatic", BooleanValue (false));
   mcpttHelper.SetPusherPushVariable ("ns3::NormalRandomVariable",
                          "Mean", DoubleValue (pushTimeMean),
                          "Variance", DoubleValue (pushTimeVariance));
@@ -356,60 +364,105 @@ Ipv4AddressValue grpAddr;
 //creating location to store application info of UEs A, B 
 Ptr<McpttPttApp> ueAPttApp = DynamicCast<McpttPttApp, Application> (clientApps.Get (0));
 Ptr<McpttPttApp> ueBPttApp = DynamicCast<McpttPttApp, Application> (clientApps.Get (1));
-  
-//push button press schedule
-Simulator::Schedule (Seconds (1.1), &McpttPttApp::TakePushNotification, ueAPttApp);
+Ptr<McpttPttApp> ueCPttApp = DynamicCast<McpttPttApp, Application> (clientApps.Get (2));
 
-//send floor request*********************************************
+  //UE A
+  uint32_t grpId = 1;
+  uint16_t AcallId = 1;
+  uint32_t AorigId = ueAPttApp->GetUserId ();
+  McpttCallMsgFieldSdp sdp;
+  
+    //UE A
+ 
+  //uint16_t BcallId = 2;
+  //uint32_t BorigId = ueBPttApp->GetUserId ();
+ 
+   
+    //UE C
+  
+  //uint16_t CcallId = 3;
+  //uint32_t CorigId = ueCPttApp->GetUserId ();
  
 //floor and call machines generate*******************************
-McpttCallMachineGrpBroadcast machines;
- 
-// generate call 
 ueAPttApp->CreateCall (callFac, floorFac);
 ueAPttApp->SelectLastCall ();
 ueBPttApp->CreateCall (callFac, floorFac);
 ueBPttApp->SelectLastCall ();
-  
+ueCPttApp->CreateCall (callFac, floorFac);
+ueCPttApp->SelectLastCall ();
+
+
 //creating call interfaces and location to store call of UEs A, B 
 Ptr<McpttCall> ueACall = ueAPttApp->GetSelectedCall ();
 Ptr<McpttCall> ueBCall = ueBPttApp->GetSelectedCall ();
-Ptr<McpttChan> callChan = ueAPttApp->GetCallChan ();
-  
-//Ptr<McpttCallMachine> ueAMachine = ueACall->GetCallMachine ();
-Ptr<McpttCallMachineGrpBroadcast> Abroadcastgroup = DynamicCast<McpttCallMachineGrpBroadcast, McpttCallMachine>(ueACall->GetCallMachine ());
-Ptr<McpttCallMachineGrpBroadcast> Bbroadcastgroup =  DynamicCast<McpttCallMachineGrpBroadcast, McpttCallMachine>(ueBCall->GetCallMachine ());;
+Ptr<McpttCall> ueCCall = ueCPttApp->GetSelectedCall ();
 
-//Ptr<McpttPttApp> ueBPttApp = DynamicCast<McpttPttApp, Application> (clientApps.Get (1));
-  uint32_t grpId = 1;
-  uint16_t callId = 1;
-  uint32_t origId = ueAPttApp->GetUserId ();
-  McpttCallMsgFieldSdp sdp;
+
+//Ptr<McpttCallMachine> ueAMachine = ueACall->GetCallMachine ();
+Ptr<McpttCallMachineGrpBroadcast> Abroadcastgroupmachine = DynamicCast<McpttCallMachineGrpBroadcast, McpttCallMachine>(ueACall->GetCallMachine ());
+Ptr<McpttCallMachineGrpBroadcast> Bbroadcastgroupmachine =  DynamicCast<McpttCallMachineGrpBroadcast, McpttCallMachine>(ueBCall->GetCallMachine ());
+Ptr<McpttCallMachineGrpBroadcast> Cbroadcastgroupmachine =  DynamicCast<McpttCallMachineGrpBroadcast, McpttCallMachine>(ueBCall->GetCallMachine ());
+/*
+  Abroadcastgroupmachine->SetDelayTfb1(delayTfb1);
+  Abroadcastgroupmachine->SetDelayTfb2(delayTfb2);
+  Abroadcastgroupmachine->SetDelayTfb3(delayTfb3);
+
+  Bbroadcastgroupmachine->SetDelayTfb1(delayTfb1);
+  Bbroadcastgroupmachine->SetDelayTfb2(delayTfb2);
+  Bbroadcastgroupmachine->SetDelayTfb3(delayTfb3);
+
+  Cbroadcastgroupmachine->SetDelayTfb1(delayTfb1);
+  Cbroadcastgroupmachine->SetDelayTfb2(delayTfb2);
+  Cbroadcastgroupmachine->SetDelayTfb3(delayTfb3);
+
+Ptr<McpttTimer> Atfb1  = Abroadcastgroupmachine->GetTfb1();
+Ptr<McpttTimer> Btfb1  = Bbroadcastgroupmachine->GetTfb1();
+Ptr<McpttTimer> Ctfb1  = Cbroadcastgroupmachine->GetTfb1();
+Ptr<McpttTimer> Atfb2  = Abroadcastgroupmachine->GetTfb2();
+*/
+
+//push button press schedule
+Simulator::Schedule (Seconds (2.2), &McpttPttApp::TakePushNotification, ueAPttApp);
+
+
+Ptr<McpttChan> AcallChan = ueAPttApp->GetCallChan ();
+Ptr<McpttChan> BcallChan = ueBPttApp->GetCallChan ();
+Ptr<McpttChan> CcallChan = ueCPttApp->GetCallChan ();
+
   // UE A
-  Abroadcastgroup->SetCallId (callId);
-  Abroadcastgroup->SetGrpId (grpId);
-  Abroadcastgroup->SetOrigId (origId);
-  Abroadcastgroup->SetSdp (sdp);
-  Abroadcastgroup->SetCallType (McpttCallMsgFieldCallType::BROADCAST_GROUP);
-  Abroadcastgroup->SetPriority (McpttCallMsgFieldCallType::GetCallTypePriority (McpttCallMsgFieldCallType::BROADCAST_GROUP));
-  //Abroadcastgroup->SetStartState (McpttCallMachineGrpBroadcastStateB2::GetInstance ());
+  Abroadcastgroupmachine->SetCallId (AcallId);
+  Abroadcastgroupmachine->SetGrpId (grpId);
+  Abroadcastgroupmachine->SetOrigId (AorigId);
+  Abroadcastgroupmachine->SetSdp (sdp);
+  Abroadcastgroupmachine->SetCallType (McpttCallMsgFieldCallType::BROADCAST_GROUP);
+  Abroadcastgroupmachine->SetPriority (McpttCallMsgFieldCallType::GetCallTypePriority (McpttCallMsgFieldCallType::BROADCAST_GROUP));
+  
+
+  //m_startStatertState (McpttCallMachineGrpBroadcastStateB2::GetInstance ());
 
 Ptr<McpttPusher> ueAPusher = ueAPttApp->GetPusher ();
 Ptr<McpttPusher> ueBPusher = ueBPttApp->GetPusher ();
+Ptr<McpttPusher> ueCPusher = ueCPttApp->GetPusher ();
 
 Ptr<McpttMediaSrc> ueAMediaSrc = ueAPttApp->GetMediaSrc ();
 Ptr<McpttMediaSrc> ueBMediaSrc = ueBPttApp->GetMediaSrc ();
+Ptr<McpttMediaSrc> ueCMediaSrc = ueCPttApp->GetMediaSrc ();
+
 
 McpttCallMachineGrpBroadcast broadcastMachines;
 broadcastMachines.SetDelayTfb1(delayTfb1);
-broadcastMachines.SetDelayTfb2(delayTfb1);
-broadcastMachines.SetDelayTfb3(delayTfb1);
+broadcastMachines.SetDelayTfb2(delayTfb2);
+broadcastMachines.SetDelayTfb3(delayTfb3);
+
 Ptr<McpttTimer> tfb1 =broadcastMachines.GetTfb1();
 Ptr<McpttTimer> tfb2 =broadcastMachines.GetTfb2();
 Ptr<McpttTimer> tfb3 =broadcastMachines.GetTfb3();
 
-Simulator::Schedule (Seconds (5.15), &McpttCall::OpenFloorChan, ueACall, grpAddress.Get (), floorPort);
+
+
+
 //Simulator::Schedule (Seconds (5.15), &McpttCall::OpenFloorChan, ueBCall, grpAddress.Get (), floorPort);
+
 
 /*McpttCallMsgGrpEmergAlert::McpttCallMsgGrpEmergAlert (void)
   : McpttCallMsg (McpttCallMsgGrpEmergAlert::CODE),
@@ -421,7 +474,25 @@ Simulator::Schedule (Seconds (5.15), &McpttCall::OpenFloorChan, ueACall, grpAddr
 */
   
   //floor request generate
+  //  ns3::McpttFloorMachine ns3::McpttFloorMachineBasic
+//ns3::McpttFloorMachineBasicState
+//ns3:McpttFloorMachineBasicStateHasPerm
+//ns3::McpttCallTypeMachine
+
+  //turn off floor control ns3::McpttFloorMachineNull
   //
+  //ns3::McpttMsg
+  //ns3::McpttCallMsg
+  //ns3::McpttFloorMsg
+  //ns3::McpttFloorMsgRequest
+  //ns3::McpttFloorMsgFieldUserId
+
+  //ns3::McpttMediaMsg
+  //ns3::McpttCallMsg
+
+  //ns3::McpttFloorQueue ==0
+
+//generating floor control message 
   McpttFloorMsgFieldIndic indic = McpttFloorMsgFieldIndic ();
   indic.Indicate (McpttFloorMsgFieldIndic::BROADCAST_CALL);
 
@@ -434,56 +505,21 @@ Simulator::Schedule (Seconds (5.15), &McpttCall::OpenFloorChan, ueACall, grpAddr
 
   McpttFloorMsgFieldUserId id = McpttFloorMsgFieldUserId ();
   id.SetUserId (9);
-
-  McpttFloorMsgRequest dstMsg;
-  McpttFloorMsgRequest srcMsg;
-
-  srcMsg.SetIndicator (indic);
-  srcMsg.SetPriority (priority);
-  srcMsg.UpdateTrackInfo (trackInfo);
-  srcMsg.SetUserId (id);
-
-  Ptr<Packet> p = Create<Packet> ();
-  p->AddHeader (srcMsg);
-  p->RemoveHeader(dstMsg);
-  //callChan->Send (p);
-
-  std::stringstream dstStr;
-  std::stringstream srcStr;
-
-  dstMsg.Print (dstStr);
-  srcMsg.Print (srcStr);
   
+  McpttCallMsgFieldCallId call_Id;
+  call_Id.SetCallId (AcallId);
 
-  //floor granted to A
-  McpttFloorMachineBasic Amachinefloor;
-  Amachinefloor.HasFloor() ;
-  
+  McpttCallMsgFieldCallType callType;
+  callType.SetType (McpttCallMsgFieldCallType::EMERGENCY_GROUP);
 
- /*
- McpttFloorMsgRequest::McpttFloorMsgRequest (uint32_t ssrc)
-  : McpttFloorMsg (McpttFloorMsgRequest::SUBTYPE, ssrc)
-{
-  NS_LOG_FUNCTION (this << ssrc);
+  McpttCallMsgFieldGrpId grp_Id;
+  grp_Id.SetGrpId (grpId);
 
-  uint8_t length = GetLength ();
-  McpttFloorMsgFieldIndic indicator;
-  McpttFloorMsgFieldPriority priority;
-  McpttFloorMsgFieldTrackInfo trackInfo;
-  McpttFloorMsgFieldUserId userId;
+  McpttCallMsgFieldLastChgTime lastChgTime;
+  lastChgTime.SetTime (Seconds (4));
 
-  length += indicator.GetSerializedSize ();
-  length += priority.GetSerializedSize ();
-  length += trackInfo.GetSerializedSize ();
-  length += userId.GetSerializedSize ();
-
-  SetLength (length);
-  SetIndicator (indicator);
-  SetPriority (priority);
-  SetTrackInfo (trackInfo);
-  SetUserId (userId);
-}
- */
+  McpttCallMsgFieldUserId lastChgUserId;
+  lastChgUserId.SetId (15);
 
 //******************************* 
        
@@ -501,32 +537,41 @@ pkt->AddHeader (msg);
  
 NS_LOG_LOGIC (Simulator::Now ().GetSeconds () << "s: PttApp sending " << msg << ".");
 
-//establish media session***************************** 
-Simulator::Schedule (Seconds (5.15), &McpttCall::OpenMediaChan, ueACall, grpAddress.Get (), speechPort); 
-//Simulator::Schedule (Seconds (5.15), &McpttCall::OpenMediaChan, ueBCall, grpAddress.Get (), speechPort);
-
-//release button : send call***************************
-
 
 //start timer TFB1 and TFB2***************************
-Simulator::Schedule (Seconds (2.1), &McpttTimer::Start, tfb1);
-
-// synchronization and call in progress 
+//establish media session***************************** 
+//release button : send call***************************
+  Simulator::Schedule (Seconds (2.1), &McpttTimer::Start, tfb1);
+  Simulator::Schedule (Seconds (2.1), &McpttTimer::Start, tfb2);
+  Simulator::Schedule (Seconds (2.15), &McpttCall::OpenFloorChan, ueACall, grpAddress.Get (), floorPort);
+  Simulator::Schedule (Seconds (2.15), &McpttCall::OpenMediaChan, ueACall, grpAddress.Get (), speechPort);
+  Simulator::Schedule (Seconds (2.15), &McpttCall::OpenFloorChan, ueBCall, grpAddress.Get (), floorPort);
+  Simulator::Schedule (Seconds (2.15), &McpttCall::OpenMediaChan, ueBCall, grpAddress.Get (), speechPort);
+  Simulator::Schedule (Seconds (2.15), &McpttCall::OpenFloorChan, ueCCall, grpAddress.Get (), floorPort);
+  Simulator::Schedule (Seconds (2.15), &McpttCall::OpenMediaChan, ueCCall, grpAddress.Get (), speechPort);
   
-//end of call
-Simulator::Schedule (Seconds (3.0), &McpttPttApp::ReleaseCall, ueAPttApp);
-
-
-
+//// synchronization and call in progress 
+Simulator::Schedule (Seconds (5.25), &McpttPttApp::ReleaseCall, ueAPttApp);
 
 //Result generation*******************************************
 
-  //Packets traces
+//Packets traces
   AsciiTraceHelper ascii;
   Ptr<OutputStreamWrapper> stream = ascii.CreateFileStream ("b20.tr");
   wifiPhy.EnableAsciiAll (stream);
   internet.EnableAsciiIpv4All (stream);
+  
+  AsciiTraceHelper ascii_wifi;
+  wifiPhy.EnableAsciiAll (ascii_wifi.CreateFileStream ("wifi-packet-socket.tr"));
+  
+   AsciiTraceHelper ascii_r;
+  Ptr<OutputStreamWrapper> rtw = ascii_r.CreateFileStream ("routing_table");
 
+  AsciiTraceHelper ascii_trace;
+
+  std::ostringstream oss;
+  Ptr<OutputStreamWrapper> packetOutputStream = ascii_trace.CreateFileStream ("b20_trace.txt");
+  *packetOutputStream->GetStream () << "time(sec)\ttx/rx\tC/S\tNodeID\tIP[src]\tIP[dst]\tPktSize(bytes)" << std::endl;
 
 NS_LOG_INFO ("Enabling MCPTT traces...");
 mcpttHelper.EnableMsgTraces ();
