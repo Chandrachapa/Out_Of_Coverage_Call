@@ -44,6 +44,7 @@
 #include "ns3/config-store.h"
 #include <cfloat>
 #include <sstream>
+#include "ns3/netanim-module.h"
 
 using namespace ns3;
 
@@ -413,6 +414,8 @@ int main (int argc, char *argv[])
   NS_LOG_INFO ("Starting simulation...");
 
   Simulator::Stop (simTime);
+  AnimationInterface anim("sl_relay.xml");
+anim.SetMaxPktsPerTraceFile(500000);
 
   Simulator::Run ();
   Simulator::Destroy ();

@@ -1,4 +1,3 @@
-
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
 #include "ns3/applications-module.h"
@@ -28,7 +27,9 @@ using namespace ns3;
 //initial environment :initial parameter configurations 
 NS_LOG_COMPONENT_DEFINE ("broadcast_call_technique");
 
-//packet trace 
+//virtual void ReceiveFloorRelease (const McpttFloorMsgRelease& msg);
+//virtual void Send (const McpttFloorMsg& msg);
+
 void
 UePacketTrace (Ptr<OutputStreamWrapper> stream, const Address &localAddrs, std::string context, Ptr<const Packet> p, const Address &srcAddrs, const Address &dstAddrs)
 {
@@ -83,6 +84,50 @@ UePacketTrace (Ptr<OutputStreamWrapper> stream, const Address &localAddrs, std::
 }
 
 
+class BroadcastTestCallMachine : public McpttCallMachineGrpBroadcast
+{
+public:
+ static TypeId GetTypeId (void);
+ BroadcastTestCallMachine (void);
+ virtual ~BroadcastTestCallMachine (void);
+ virtual void ChangeState (Ptr<McpttCallMachineGrpBroadcastState>  newState);
+ virtual TypeId GetInstanceTypeId (void) const;
+ virtual void Receive (const McpttCallMsg& msg);
+ virtual void Start (void);
+ virtual void Send (const McpttCallMsg& msg);
+protected:
+ virtual void ExpiryOfTfb1 (void);
+ virtual void ExpiryOfTfb2 (void);
+ virtual void ExpiryOfTfb3 (void);
+private:
+ Callback<void, const BroadcastTestCallMachine&, const McpttCallMsg&> m_postRxCb;
+ Callback<void, const BroadcastTestCallMachine&, const McpttTimer&> m_postTimerExpCb;
+ Callback<void, const BroadcastTestCallMachine&, const McpttCallMsg&> m_postTxCb;
+ Callback<void, const BroadcastTestCallMachine&, const McpttCallMsg&> m_preRxCb;
+ Callback<void, const BroadcastTestCallMachine&, const McpttTimer&> m_preTimerExpCb;
+ Callback<void, const BroadcastTestCallMachine&, const McpttCallMsg&> m_preTxCb;
+ Ptr<McpttCallMachineGrpBroadcastState> m_startState;
+ Callback<void, const BroadcastTestCallMachine&, Ptr<McpttCallMachineGrpBroadcastState> , Ptr<McpttCallMachineGrpBroadcastState> > m_stateChangeCb;
+public:
+ virtual Callback<void, const BroadcastTestCallMachine&, const McpttCallMsg&> GetPostRxCb (void) const;
+ virtual Callback<void, const BroadcastTestCallMachine&, const McpttTimer&> GetPostTimerExpCb (void) const;
+ virtual Callback<void, const BroadcastTestCallMachine&, const McpttCallMsg&> GetPostTxCb (void) const;
+ virtual Callback<void, const BroadcastTestCallMachine&, const McpttCallMsg&> GetPreRxCb (void) const;
+ virtual Callback<void, const BroadcastTestCallMachine&, const McpttTimer&> GetPreTimerExpCb (void) const;
+ virtual Callback<void, const BroadcastTestCallMachine&, const McpttCallMsg&> GetPreTxCb (void) const;
+ virtual Ptr<McpttCallMachineGrpBroadcastState> GetStartState(void) const;
+ virtual Callback<void, const BroadcastTestCallMachine&, Ptr<McpttCallMachineGrpBroadcastState> , Ptr<McpttCallMachineGrpBroadcastState> > GetStateChangeCb (void) const;
+ virtual void SetPostRxCb (const Callback<void, const BroadcastTestCallMachine&, const McpttCallMsg&>  postRxCb);
+ virtual void SetPostTimerExpCb (const Callback<void, const BroadcastTestCallMachine&, const McpttTimer&>  timerExpCb);
+ virtual void SetPostTxCb (const Callback<void, const BroadcastTestCallMachine&, const McpttCallMsg&>  postTxCb);
+ virtual void SetPreRxCb (const Callback<void, const BroadcastTestCallMachine&, const McpttCallMsg&>  preRxCb);
+ virtual void SetPreTimerExpCb (const Callback<void, const BroadcastTestCallMachine&, const McpttTimer&>  timerExpCb);
+ virtual void SetPreTxCb (const Callback<void, const BroadcastTestCallMachine&, const McpttCallMsg&>  preTxCb);
+ virtual void SetStartState (Ptr<McpttCallMachineGrpBroadcastState>  startState);
+ virtual void SetStateChangeTestCb (const Callback<void, const BroadcastTestCallMachine&, Ptr<McpttCallMachineGrpBroadcastState> , Ptr<McpttCallMachineGrpBroadcastState> >  stateChangeCb);
+};
+
+
 
 int main (int argc, char *argv[])
 {
@@ -110,7 +155,6 @@ appCount = usersPerGroup * groupcount;
 uint16_t floorPort = McpttPttApp::AllocateNextPortNumber ();
 uint16_t speechPort = McpttPttApp::AllocateNextPortNumber ();
 Ipv4AddressValue grpAddress;
-//bool remoteUesOoc = true;
 
 
 // set config for floor request and call generation
@@ -140,9 +184,8 @@ Time delayTfb3 = Seconds(5);
 //Physical layer 
 
 //creating 3 nodes
-  NodeContainer nodes;
-  nodes.Create(appCount);
-
+NodeContainer nodes;
+nodes.Create (appCount);
 
 //positioning nodes
 NS_LOG_INFO ("Building physical topology...");
@@ -169,16 +212,12 @@ mobility.SetPositionAllocator (positionAlloc);
 mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
 mobility.Install (nodes);
 
-//AsciiTraceHelper ascii;
-//mobility.EnableAsciiAll (ascii.CreateFileStream ("MobilityTrace.txt"));
-
 //sidelink pre-configuration
 //Configure the UE for UE_SELECTED scenario
 Config::SetDefault ("ns3::LteUeMac::SlGrantMcs", UintegerValue (16));
 Config::SetDefault ("ns3::LteUeMac::SlGrantSize", UintegerValue (5)); //The number of RBs allocated per UE for Sidelink
 Config::SetDefault ("ns3::LteUeMac::Ktrp", UintegerValue (1));
 Config::SetDefault ("ns3::LteUeMac::UseSetTrp", BooleanValue (true)); //use default Trp index of 0
-//Config::SetDefault ("ns3::LteUeMac::SlScheduler", StringValue ("MaxCoverage")); //Values include Fixed, Random, MinPrb, MaxCoverage
 
 //for tracing
 Config::SetDefault ("ns3::McpttMsgStats::CallControl", BooleanValue (true));
@@ -199,6 +238,9 @@ Config::SetDefault ("ns3::LteSpectrumPhy::DropRbOnCollisionEnabled", BooleanValu
 //Set the UEs power in dBm
 Config::SetDefault ("ns3::LteUePhy::TxPower", DoubleValue (23.0));
 
+//cmd.AddValue ("simTime", "Total duration of the simulation", simTime);
+//cmd.AddValue ("enableNsLogs", "Enable ns-3 logging (debug builds)", enableNsLogs);
+//cmd.Parse (argc, argv);
 
 //Sidelink bearers activation time
 //Time slBearersActivationTime = startTime;
@@ -288,12 +330,8 @@ pfactory.SetDataPrbEnd (49);
 
 preconfiguration.preconfigComm.pools[0] = pfactory.CreatePool ();
 pfactory.SetHaveUeSelectedResourceConfig (true);
-
-
-  //NetDeviceContainer relayUeDevs = lteHelper->InstallUeDevice (relayUeNodes);
-  //NetDeviceContainer remoteUeDevs = lteHelper->InstallUeDevice (remoteUeNodes);
-  NetDeviceContainer devices ;
-
+    
+NetDeviceContainer devices;
 ueSidelinkConfiguration->SetSlPreconfiguration (preconfiguration);
 lteHelper->InstallSidelinkConfiguration (devices, ueSidelinkConfiguration);
   
@@ -329,14 +367,10 @@ NS_LOG_INFO ("Assigning IP addresses to each net device...");
 Ipv4AddressHelper ipv4;
 ipv4.SetBase ("10.1.1.0", "255.255.255.0");
 Ipv4InterfaceContainer i = ipv4.Assign (devices);
- 
-
-
 ns3::PacketMetadata::Enable ();
 /*Application layer*************************************************************************************/
 
 NS_LOG_INFO ("Creating applications...");
-
 //creating mcptt application for each device 
  
 ApplicationContainer clientApps;
@@ -389,9 +423,11 @@ Ptr<McpttPttApp> ueCPttApp = DynamicCast<McpttPttApp, Application> (clientApps.G
   uint32_t grpId = 1;
   uint16_t callId = 1;
   
-//McpttCallMsgFieldUserLoc m_userLoc;
+
 
   //UE B 
+  
+  
   std::string orgName = "EMS";
   Time joinTime = Seconds (2.2);
   uint32_t origId = ueAPttApp->GetUserId ();
@@ -404,7 +440,16 @@ Ptr<McpttPttApp> ueCPttApp = DynamicCast<McpttPttApp, Application> (clientApps.G
   sdp.SetGrpAddr (grpAddress.Get ());
   sdp.SetOrigAddr (origAddress);
   sdp.SetSpeechPort (speechPort);
-
+    //UE A
+ 
+  //uint16_t BcallId = 2;
+  //uint32_t BorigId = ueBPttApp->GetUserId ();
+ 
+   
+    //UE C
+  
+  //uint16_t CcallId = 3;
+  //uint32_t CorigId = ueCPttApp->GetUserId ();
  
 //floor and call machines generate*******************************
 ueAPttApp->CreateCall (callFac, floorFac);
@@ -434,10 +479,10 @@ Ptr<McpttCallMachineGrpBroadcast> Cbroadcastgroupmachine =  DynamicCast<McpttCal
   Abroadcastgroupmachine->SetSdp (sdp);
   Abroadcastgroupmachine->SetCallType (McpttCallMsgFieldCallType::BROADCAST_GROUP);
   Abroadcastgroupmachine->SetPriority (McpttCallMsgFieldCallType::GetCallTypePriority (McpttCallMsgFieldCallType::BROADCAST_GROUP));
-  
   McpttCallMachineGrpBroadcastStateB2::GetInstance ();
+
  
-  // UE B
+    // UE B
   Bbroadcastgroupmachine ->SetCallId (callId);
   Bbroadcastgroupmachine ->SetGrpId (grpId);
   Bbroadcastgroupmachine ->SetOrigId (origId);
@@ -447,7 +492,7 @@ Ptr<McpttCallMachineGrpBroadcast> Cbroadcastgroupmachine =  DynamicCast<McpttCal
   McpttCallMachineGrpBroadcastStateB2::GetInstance ();
  
 
-  // UE C
+      // UE C
   Cbroadcastgroupmachine ->SetCallId (callId);
   Cbroadcastgroupmachine ->SetGrpId (grpId);
   Cbroadcastgroupmachine ->SetOrigId (origId);
@@ -456,11 +501,13 @@ Ptr<McpttCallMachineGrpBroadcast> Cbroadcastgroupmachine =  DynamicCast<McpttCal
   Cbroadcastgroupmachine ->SetPriority (McpttCallMsgFieldCallType::GetCallTypePriority (McpttCallMsgFieldCallType::BROADCAST_GROUP));
   McpttCallMachineGrpBroadcastStateB2::GetInstance ();
 
-  //push button press schedule
+
+//push button press schedule
+
 
   Simulator::Schedule (Seconds (2.2), &McpttPttApp::TakePushNotification, ueAPttApp);
   McpttCallMachineGrpBroadcastStateB1::GetStateId ();
-  McpttCallMachineGrpBroadcastStateB1::GetInstance ();
+
   Ptr<McpttChan> AcallChan = ueAPttApp->GetCallChan ();
   Ptr<McpttChan> BcallChan = ueBPttApp->GetCallChan ();
   Ptr<McpttChan> CcallChan = ueCPttApp->GetCallChan ();
@@ -473,6 +520,8 @@ Ptr<McpttCallMachineGrpBroadcast> Cbroadcastgroupmachine =  DynamicCast<McpttCal
   Abroadcastgroupmachine->SetCallType (McpttCallMsgFieldCallType::BROADCAST_GROUP);
   Abroadcastgroupmachine->SetPriority (McpttCallMsgFieldCallType::GetCallTypePriority (McpttCallMsgFieldCallType::BROADCAST_GROUP));
   
+
+  //m_startStatertState (McpttCallMachineGrpBroadcastStateB2::GetInstance ());
 
 Ptr<McpttPusher> ueAPusher = ueAPttApp->GetPusher ();
 Ptr<McpttPusher> ueBPusher = ueBPttApp->GetPusher ();
@@ -510,6 +559,35 @@ Ptr<McpttTimer> Ctfb1 =CbroadcastMachines.GetTfb1();
 Ptr<McpttTimer> Ctfb3 =CbroadcastMachines.GetTfb3();
 Ptr<McpttCallMachineGrpBroadcastState> stateC = CbroadcastMachines.GetState ();
 
+//Simulator::Schedule (Seconds (5.15), &McpttCall::OpenFloorChan, ueBCall, grpAddress.Get (), floorPort);
+
+
+/*McpttCallMsgGrpEmergAlert::McpttCallMsgGrpEmergAlert (void)
+  : McpttCallMsg (McpttCallMsgGrpEmergAlert::CODE),
+    m_grpId (McpttCallMsgFieldGrpId ()),
+    m_orgName (McpttCallMsgFieldOrgName ()),
+    m_userId (McpttCallMsgFieldUserId ()),
+    m_userLoc (McpttCallMsgFieldUserLoc ());
+*/
+  
+  //floor request generate
+  //  ns3::McpttFloorMachine ns3::McpttFloorMachineBasic
+//ns3::McpttFloorMachineBasicState
+//ns3:McpttFloorMachineBasicStateHasPerm
+//ns3::McpttCallTypeMachine
+
+  //turn off floor control ns3::McpttFloorMachineNull
+  //
+  //ns3::McpttMsg
+  //ns3::McpttCallMsg
+  //ns3::McpttFloorMsg
+  //ns3::McpttFloorMsgRequest
+  //ns3::McpttFloorMsgFieldUserId
+
+  //ns3::McpttMediaMsg
+  //ns3::McpttCallMsg
+
+  //ns3::McpttFloorQueue ==0
 
 //generating floor control message 
   McpttFloorMsgFieldIndic indic = McpttFloorMsgFieldIndic ();
@@ -539,11 +617,21 @@ Ptr<McpttCallMachineGrpBroadcastState> stateC = CbroadcastMachines.GetState ();
 
   McpttCallMsgFieldUserId lastChgUserId;
   lastChgUserId.SetId (15);
+ //SetUserLoc (const McpttCallMsgFieldUserLoc& userLoc)*************
 
+
+//******************************* 
+       
+//send floor control info (SCI) share to all participants**************
+
+//relay : reception of SCI and decide to join the call
+
+
+//generate message************************************ 
+
+//Ptr<McpttTimer> ueATfb1 = ueAMachine->GetTfb1 ();
 Ptr<Packet> pkt = Create<Packet> ();
 pkt->AddHeader (msg);
-
-
 //callChan->Send (pkt);  
  
 NS_LOG_LOGIC (Simulator::Now ().GetSeconds () << "s: PttApp sending " << msg << ".");
@@ -554,8 +642,8 @@ NS_LOG_LOGIC (Simulator::Now ().GetSeconds () << "s: PttApp sending " << msg << 
 //release button : send call***************************
   Simulator::Schedule (Seconds (2.1), &McpttTimer::Start, Atfb1);
   Simulator::Schedule (Seconds (2.1), &McpttTimer::Start, Atfb2);
-  Simulator::Schedule (Seconds (2.1), &McpttTimer::Start, Btfb1);
-  Simulator::Schedule (Seconds (2.1), &McpttTimer::Start, Ctfb1);
+    Simulator::Schedule (Seconds (2.1), &McpttTimer::Start, Btfb1);
+Simulator::Schedule (Seconds (2.1), &McpttTimer::Start, Ctfb1);
   McpttCallMachineGrpBroadcastStateB2::GetStateId ();
   
   Simulator::Schedule (Seconds (2.15), &McpttCall::OpenFloorChan, ueACall, grpAddress.Get (), floorPort);
@@ -566,9 +654,7 @@ NS_LOG_LOGIC (Simulator::Now ().GetSeconds () << "s: PttApp sending " << msg << 
   Simulator::Schedule (Seconds (2.15), &McpttCall::OpenMediaChan, ueCCall, grpAddress.Get (), speechPort);
   
 //// synchronization and call in progress 
- //UdpEchoServer listening in the Remote UE port
 
- 
 
 //end call
  Simulator::Schedule (Seconds (5.25), &McpttPttApp::ReleaseCall, ueAPttApp);
@@ -578,12 +664,13 @@ McpttCallMsgGrpBroadcastEnd Endmsg;
 //B, C receive end message
 BbroadcastMachines.ReceiveGrpCallBroadcastEnd(Endmsg);
 CbroadcastMachines.ReceiveGrpCallBroadcastEnd(Endmsg);
-Simulator::Schedule (Seconds (5.25), &McpttTimer::Stop, Atfb1);
-Simulator::Schedule (Seconds (5.25), &McpttTimer::Stop, Atfb2);
-Simulator::Schedule (Seconds (5.25), &McpttTimer::Stop, Btfb1);
+  Simulator::Schedule (Seconds (5.25), &McpttTimer::Stop, Atfb1);
+  Simulator::Schedule (Seconds (5.25), &McpttTimer::Stop, Atfb2);
+    Simulator::Schedule (Seconds (5.25), &McpttTimer::Stop, Btfb1);
 Simulator::Schedule (Seconds (5.25), &McpttTimer::Stop, Ctfb1);
 
 //Result generation*******************************************
+
 //Packets traces
 
 ns3::PacketMetadata::Enable ();
@@ -611,8 +698,6 @@ AsciiTraceHelper ascii;
   //Trace file table header
   *stream->GetStream () << "time(sec)\ttx/rx\tNodeID\tIMSI\tPktSize(bytes)\tIP[src]\tIP[dst]" << std::endl;
 
-
-
 NS_LOG_INFO ("Enabling MCPTT traces...");
 mcpttHelper.EnableMsgTraces ();
 mcpttHelper.EnableStateMachineTraces ();
@@ -620,7 +705,7 @@ mcpttHelper.EnableStateMachineTraces ();
 NS_LOG_INFO ("Starting simulation...");
 AnimationInterface anim("b20.xml");
 anim.SetMaxPktsPerTraceFile(500000);
-std::cout << "okay" << std::endl;
+
 //Simulator::Stop (Seconds (stopTime));
 //anim.SetConstantPosition(nodes.Get(0),1.0,2.0);
 //anim.SetConstantPosition(nodes.Get(1),4.0,5.0);
