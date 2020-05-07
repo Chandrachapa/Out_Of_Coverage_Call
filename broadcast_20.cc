@@ -21,6 +21,7 @@
 #include <iostream>
 #include <ns3/mcptt-floor-msg.h>
 #include <ns3/mcptt-floor-msg-field.h>
+#include "ns3/ipv4-l3-protocol.h"
 
 using namespace ns3;
 //using namespace psc;
@@ -104,14 +105,13 @@ Time startTime = Seconds (1);
 Time stopTime = Seconds (30);
 TypeId socketFacTid = UdpSocketFactory::GetTypeId ();
 //uint32_t groupId = 1;
-Ipv4Address peerAddress = Ipv4Address ("255.255.255.255");
+//Ipv4Address peerAddress = Ipv4Address ("255.255.255.255");
 appCount = usersPerGroup * groupcount;
   
 uint16_t floorPort = McpttPttApp::AllocateNextPortNumber ();
 uint16_t speechPort = McpttPttApp::AllocateNextPortNumber ();
 Ipv4AddressValue grpAddress;
 //bool remoteUesOoc = true;
-
 
 // set config for floor request and call generation
 //McpttFloorMsgFieldSsrc ssrc;
@@ -207,7 +207,7 @@ Config::SetDefault ("ns3::LteUePhy::TxPower", DoubleValue (23.0));
 Ptr<LteHelper> lteHelper = CreateObject<LteHelper> ();
 
 //Create and set the EPC helper
-//Ptr<PointToPointEpcHelper>  epcHelper = CreateObject<PointToPointEpcHelper> ();
+Ptr<PointToPointEpcHelper>  epcHelper = CreateObject<PointToPointEpcHelper> ();
 //lteHelper->SetEpcHelper (epcHelper);
 
 //Create Sidelink helper and set lteHelper
@@ -299,6 +299,7 @@ lteHelper->InstallSidelinkConfiguration (devices, ueSidelinkConfiguration);
   
 /*Network layer***************************************************************************************/
 //installing wifi interface in nodes
+
 WifiHelper wifi;
 wifi.SetStandard (WIFI_PHY_STANDARD_80211g); //2.4Ghz
 wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager",
@@ -326,44 +327,107 @@ internet.Install (nodes);
   
 // assigning ip addresses to all devices of nodes
 NS_LOG_INFO ("Assigning IP addresses to each net device...");
+
+
+  uint32_t groupL2Address = 255;
+  Ipv4AddressHelper ipv4;
+  ipv4.SetBase ("10.1.1.0", "255.255.255.0");
+  Ipv4Address groupAddress4 = Ipv4Address ("255.255.255.255");
+ // Ipv4Address groupAddress4("225.0.0.0");
+  //Ipv4Address groupAddress4 ("225.0.0.0");     //use multicast address as destination
+  Ipv6Address groupAddress6 ("ff0e::1");     //use multicast address as destination
+  Address remoteAddress;
+  Address localAddress;
+  Ptr<LteSlTft> tft;
+  bool useIPv6 = false;
+  if (!useIPv6)
+    {
+      Ipv4InterfaceContainer ueIpIface;
+      ueIpIface = epcHelper->AssignUeIpv4Address (NetDeviceContainer (devices));
+
+      // set the default gateway for the UE
+      Ipv4StaticRoutingHelper ipv4RoutingHelper;
+      for (uint32_t u = 0; u < nodes.GetN (); ++u)
+        {
+          Ptr<Node> ueNode = nodes.Get (u);
+          // Set the default gateway for the UE
+          Ptr<Ipv4StaticRouting> ueStaticRouting = ipv4RoutingHelper.GetStaticRouting (ueNode->GetObject<Ipv4> ());
+          ueStaticRouting->SetDefaultRoute (epcHelper->GetUeDefaultGatewayAddress (), 1);
+        }
+      remoteAddress = InetSocketAddress (groupAddress4, 8000);
+      localAddress = InetSocketAddress (Ipv4Address::GetAny (), 8000);
+      tft = Create<LteSlTft> (LteSlTft::BIDIRECTIONAL, groupAddress4, groupL2Address);
+    }
+  else
+    {
+      Ipv6InterfaceContainer ueIpIface;
+      ueIpIface = epcHelper->AssignUeIpv6Address (NetDeviceContainer (devices));
+
+      // set the default gateway for the UE
+      Ipv6StaticRoutingHelper ipv6RoutingHelper;
+      for (uint32_t u = 0; u < nodes.GetN (); ++u)
+        {
+          Ptr<Node> ueNode = nodes.Get (u);
+          // Set the default gateway for the UE
+          Ptr<Ipv6StaticRouting> ueStaticRouting = ipv6RoutingHelper.GetStaticRouting (ueNode->GetObject<Ipv6> ());
+          ueStaticRouting->SetDefaultRoute (epcHelper->GetUeDefaultGatewayAddress6 (), 1);
+        }
+      remoteAddress = Inet6SocketAddress (groupAddress6, 8000);
+      localAddress = Inet6SocketAddress (Ipv6Address::GetAny (), 8000);
+      tft = Create<LteSlTft> (LteSlTft::BIDIRECTIONAL, groupAddress6, groupL2Address);
+    }
+
+
+/*****************************
+
+
 Ipv4AddressHelper ipv4;
 ipv4.SetBase ("10.1.1.0", "255.255.255.0");
-Ipv4InterfaceContainer i = ipv4.Assign (devices);
+Ipv4InterfaceContainer i = ipv4.Assign (devices);*/
  
-
-
 ns3::PacketMetadata::Enable ();
 /*Application layer*************************************************************************************/
 
 NS_LOG_INFO ("Creating applications...");
 
 //creating mcptt application for each device 
- 
-ApplicationContainer clientApps;
 McpttHelper mcpttHelper;
+ApplicationContainer clientApps;
+
 McpttTimer mcpttTimer;
   
-  //creating mcptt service on each node
-  clientApps.Add (mcpttHelper.Install (nodes));
-  
-  clientApps.Start (startTime);
-  clientApps.Stop (stopTime);
+//creating mcptt service on each node
 
-  mcpttHelper.SetPttApp ("ns3::McpttPttApp",
-                         "PeerAddress", Ipv4AddressValue (peerAddress),
-                         "PushOnStart", BooleanValue (true));
-  mcpttHelper.SetMediaSrc ("ns3::McpttMediaSrc",
-                         "Bytes", UintegerValue (msgSize),
-                         "DataRate", DataRateValue (dataRate));
-  mcpttHelper.SetPusher ("ns3::McpttPusher",
-                         "Automatic", BooleanValue (false));
-  mcpttHelper.SetPusherPushVariable ("ns3::NormalRandomVariable",
-                         "Mean", DoubleValue (pushTimeMean),
-                         "Variance", DoubleValue (pushTimeVariance));
-  mcpttHelper.SetPusherReleaseVariable ("ns3::NormalRandomVariable",
-                         "Mean", DoubleValue (releaseTimeMean),
-                         "Variance", DoubleValue (releaseTimeVariance));
+mcpttHelper.SetPttApp ("ns3::McpttPttApp",
+                        "PeerAddress", Ipv4AddressValue (groupAddress4), 
+                        "PushOnStart", BooleanValue (true));
+mcpttHelper.SetMediaSrc ("ns3::McpttMediaSrc",
+                        "Bytes", UintegerValue (msgSize),
+                        "DataRate", DataRateValue (dataRate));
+mcpttHelper.SetPusher ("ns3::McpttPusher",
+                        "Automatic", BooleanValue (false));
+mcpttHelper.SetPusherPushVariable ("ns3::NormalRandomVariable",
+                        "Mean", DoubleValue (pushTimeMean),
+                        "Variance", DoubleValue (pushTimeVariance));
+mcpttHelper.SetPusherReleaseVariable ("ns3::NormalRandomVariable",
+                        "Mean", DoubleValue (releaseTimeMean),
+                        "Variance", DoubleValue (releaseTimeVariance));
 
+mcpttHelper.EnableStateMachineTraces();       
+
+clientApps.Add (mcpttHelper.Install (nodes));
+clientApps.Start (startTime);
+clientApps.Stop (stopTime);
+
+/*
+// PacketSinkHelper sidelinkSink ("ns3::UdpSocketFactory", localAddress);
+// ApplicationContainer serverApps = sidelinkSink.Install (nodes.Get (1));
+// serverApps.Start (startTime);
+// serverApps.Stop (stopTime);
+*/
+
+  //Set Sidelink bearers
+  //proseHelper->ActivateSidelinkBearer (Seconds(startTime), devices, tft);
 
 /*Call flow process************************************************************************************/
 
@@ -395,14 +459,22 @@ Ptr<McpttPttApp> ueCPttApp = DynamicCast<McpttPttApp, Application> (clientApps.G
   std::string orgName = "EMS";
   Time joinTime = Seconds (2.2);
   uint32_t origId = ueAPttApp->GetUserId ();
-  Ipv4Address origAddress = ueBPttApp->GetLocalAddress ();
+  int no_devices = ueAPttApp->GetNode()->GetNDevices();
+for (int i=0;i<no_devices;i++){
 
-  ueBPttApp->GetAttribute ("PeerAddress", grpAddress);
+  std::cout << "A address" << ueAPttApp->GetNode()->GetDevice(i)->GetAddress() << std::endl;
+
+
+
+}
+
+  //fix this // device ekka id within the range 
+  // 0.0.0.0
 
   McpttCallMsgFieldSdp sdp;
   sdp.SetFloorPort (floorPort);
   sdp.SetGrpAddr (grpAddress.Get ());
-  sdp.SetOrigAddr (origAddress);
+  //sdp.SetOrigAddr (origAddress);
   sdp.SetSpeechPort (speechPort);
 
  
@@ -544,7 +616,7 @@ Ptr<Packet> pkt = Create<Packet> ();
 pkt->AddHeader (msg);
 
 
-//callChan->Send (pkt);  
+//callChan->Send (pkt);  o
  
 NS_LOG_LOGIC (Simulator::Now ().GetSeconds () << "s: PttApp sending " << msg << ".");
 
@@ -568,7 +640,6 @@ NS_LOG_LOGIC (Simulator::Now ().GetSeconds () << "s: PttApp sending " << msg << 
 //// synchronization and call in progress 
  //UdpEchoServer listening in the Remote UE port
 
- 
 
 //end call
  Simulator::Schedule (Seconds (5.25), &McpttPttApp::ReleaseCall, ueAPttApp);
@@ -588,9 +659,9 @@ Simulator::Schedule (Seconds (5.25), &McpttTimer::Stop, Ctfb1);
 
 ns3::PacketMetadata::Enable ();
 AsciiTraceHelper ascii;
- Ptr<OutputStreamWrapper> stream = ascii.CreateFileStream ("b20.tr");
-  wifiPhy.EnableAsciiAll (stream);
-  internet.EnableAsciiIpv4All (stream);
+Ptr<OutputStreamWrapper> stream = ascii.CreateFileStream ("b20.tr");
+wifiPhy.EnableAsciiAll (stream);
+internet.EnableAsciiIpv4All (stream);
 *stream->GetStream () << "time(sec)\ttx/rx\tC/S\tNodeID\tIP[src]\tIP[dst]\tPktSize(bytes)" << std::endl;
 
 
@@ -610,6 +681,23 @@ AsciiTraceHelper ascii;
 
   //Trace file table header
   *stream->GetStream () << "time(sec)\ttx/rx\tNodeID\tIMSI\tPktSize(bytes)\tIP[src]\tIP[dst]" << std::endl;
+  /*******************************************************/
+    //Packets traces
+  Ptr<OutputStreamWrapper> appStream = ascii.CreateFileStream ("AppPacketTrace.txt");
+  *appStream->GetStream () << "time(s)\ttx/rx\tNodeID\tIMSI\tPktSize(bytes)\tIP[src]\tIP[dst]" << std::endl;
+
+
+  auto localAddrs =  clientApps.Get(0)->GetNode()->GetObject<Ipv4L3Protocol> ();
+  std::cout << "ip address" << localAddrs << std::endl;
+  // //Upward: Tx by UE / Rx by Remote Host
+  // oss << "rx-RH\t" << serverApps.Get (0)->GetNode ()->GetId () << "\t" << "-";
+  // serverApps.Get (0)->TraceConnect ("RxWithAddresses", oss.str (), MakeBoundCallback (&UePacketTrace, appStream, localAddrs));
+  // oss.str ("");
+
+  // //Downward: Tx by Remote Host / Rx by UE
+  // oss << "tx-RH\t" << serverApps.Get (0)->GetNode ()->GetId () << "\t" << "-";
+  // serverApps.Get (0)->TraceConnect ("TxWithAddresses", oss.str (), MakeBoundCallback (&UePacketTrace, appStream, localAddrs));
+  // oss.str ("");
 
 
 
