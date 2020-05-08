@@ -632,6 +632,7 @@ Ptr<McpttCallMachineGrpBroadcastState> stateC = CbroadcastMachines.GetState ();
 //Ptr<McpttTimer> ueATfb1 = ueAMachine->GetTfb1 ();
 Ptr<Packet> pkt = Create<Packet> ();
 pkt->AddHeader (msg);
+
 //callChan->Send (pkt);  
  
 NS_LOG_LOGIC (Simulator::Now ().GetSeconds () << "s: PttApp sending " << msg << ".");

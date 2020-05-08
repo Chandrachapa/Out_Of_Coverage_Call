@@ -39,9 +39,10 @@
 #include <ns3/udp-echo-server.h>
 #include <ns3/udp-echo-client.h>
 #include <ns3/netanim-module.h>
+#include <ns3/ipv6-interface-address.h>
+#include <ns3/ipv6-interface.h>
 
 using namespace ns3;
-
 // class SlOoc1Relay1RemoteRegularTestCase : public TestCase
 // {
 // public:
@@ -163,7 +164,7 @@ int main (int argc, char *argv[])
 {
   
   Time simTime = Seconds (20);
-  bool useRelay = false;
+  bool useRelay = true;
   double relayUeInitXPos = 300.0;
   double remoteUeInitXPos = 350.0;
 
@@ -238,9 +239,7 @@ int main (int argc, char *argv[])
   //Create nodes (eNb + UEs)
   NodeContainer enbNode;
   enbNode.Create (1);
- 
-
- // NS_LOG_INFO ("eNb node id = [" << enbNode.Get (0)->GetId () << "]");
+  // NS_LOG_INFO ("eNb node id = [" << enbNode.Get (0)->GetId () << "]");
   NodeContainer ueNodes;
   ueNodes.Create (2);
  // NS_LOG_INFO ("UE 1 node id = [" << ueNodes.Get (0)->GetId () << "]");
@@ -282,7 +281,7 @@ int main (int argc, char *argv[])
 
   
   std::cout << enbDevs.Get (0)->GetNode ()->GetId () << std::endl;
-    std::cout << ueDevs.GetN() << std::endl;
+  std::cout << ueDevs.GetN() << std::endl;
 
   //Configure Sidelink
   Ptr<LteSlEnbRrc> enbSidelinkConfiguration = CreateObject<LteSlEnbRrc> ();
@@ -436,7 +435,7 @@ int main (int argc, char *argv[])
   Ipv6AddressHelper ipv6h;
   ipv6h.SetBase (Ipv6Address ("6001:db80::"), Ipv6Prefix (64));
   Ipv6InterfaceContainer internetIpIfaces = ipv6h.Assign (internetDevices);
-
+  Ipv6InterfaceContainer internet_uedevices = ipv6h.Assign (ueDevs);
   internetIpIfaces.SetForwarding (0, true);
   internetIpIfaces.SetDefaultRouteInAllNodes (0);
 
@@ -456,13 +455,21 @@ int main (int argc, char *argv[])
     }
 
   // interface 0 is localhost, 1 is the p2p device
-  Ipv6Address remoteHostAddr = internetIpIfaces.GetAddress (1, 1);
+  Ipv6Address pgwAddr = internetIpIfaces.GetAddress (0,1);
+  Ipv6Address remoteHostAddr = internetIpIfaces.GetAddress (1,1);
+  Ipv6Address remoteUeaddress =  internet_uedevices.GetAddress(1,1);
+  Ipv6Address relayUeaddress =  internet_uedevices.GetAddress(0,1);
+  std::cout << " pgw address : " << pgwAddr << std::endl;
+  std::cout << "remote host address : " << remoteHostAddr << std::endl;
+  std::cout << "remote ue address : " << remoteUeaddress << std::endl;
+  std::cout << "relay ue address : " << relayUeaddress << std::endl;
+
   uint16_t echoPort = 8000;
 
   //Set echo server in the remote host
 
   UdpEchoServerHelper echoServer (echoPort);
-  ApplicationContainer serverApps = echoServer.Install (remoteHost);
+  ApplicationContainer serverApps = echoServer.Install (ueNodes);
   serverApps.Start (Seconds (1.0));
   serverApps.Stop (simTime);
 
@@ -473,10 +480,56 @@ int main (int argc, char *argv[])
   echoClient.SetAttribute ("MaxPackets", UintegerValue (20));
   echoClient.SetAttribute ("Interval", TimeValue (Seconds (0.5)));
   echoClient.SetAttribute ("PacketSize", UintegerValue (200));
+
   ApplicationContainer clientApps;
   clientApps = echoClient.Install (ueNodes.Get (1)); //Only the remote UE will have traffic
   clientApps.Start (Seconds (2.0));
   clientApps.Stop (simTime);
+
+//NS_LOG_INFO ("Creating applications...");
+
+//creating mcptt application for each device 
+McpttHelper mcpttHelper;
+ApplicationContainer mcpttclientApps;
+McpttTimer mcpttTimer;
+
+Time startTime = Seconds (1);
+Time stopTime = Seconds (30); 
+double pushTimeMean = 5.0; // seconds
+double pushTimeVariance = 2.0; // seconds
+double releaseTimeMean = 5.0; // seconds
+double releaseTimeVariance = 2.0; // seconds
+TypeId socketFacTid = UdpSocketFactory::GetTypeId ();
+DataRate dataRate = DataRate ("24kb/s");
+Ipv6Address PeerAddress = Ipv6Address ("6001:db80::");
+Ipv4Address groupAddress4 = Ipv4Address ("255.255.255.255");
+uint32_t msgSize = 60; //60 + RTP header = 60 + 12 = 72
+//creating mcptt service on each node
+
+mcpttHelper.SetPttApp ("ns3::McpttPttApp",
+                        "PeerAddress", Ipv4AddressValue (groupAddress4), 
+                        "PushOnStart", BooleanValue (true));
+mcpttHelper.SetMediaSrc ("ns3::McpttMediaSrc",
+                        "Bytes", UintegerValue (msgSize),
+                        "DataRate", DataRateValue (dataRate));
+mcpttHelper.SetPusher ("ns3::McpttPusher",
+                        "Automatic", BooleanValue (false));
+mcpttHelper.SetPusherPushVariable ("ns3::NormalRandomVariable",
+                        "Mean", DoubleValue (pushTimeMean),
+                        "Variance", DoubleValue (pushTimeVariance));
+mcpttHelper.SetPusherReleaseVariable ("ns3::NormalRandomVariable",
+                        "Mean", DoubleValue (releaseTimeMean),
+                        "Variance", DoubleValue (releaseTimeVariance));
+
+mcpttHelper.EnableStateMachineTraces();       
+
+mcpttclientApps.Add (mcpttHelper.Install (ueNodes));
+mcpttclientApps.Start (startTime);
+mcpttclientApps.Stop (stopTime);
+
+
+
+
   ///*** End of application configuration ***///
 
 

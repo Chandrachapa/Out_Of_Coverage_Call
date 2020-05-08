@@ -205,6 +205,7 @@ int main (int argc, char *argv[])
   Address remoteAddress;
   Address localAddress;
   Ptr<LteSlTft> tft;
+
   if (!useIPv6)
     {
       Ipv4InterfaceContainer ueIpIface;
@@ -242,9 +243,12 @@ int main (int argc, char *argv[])
       tft = Create<LteSlTft> (LteSlTft::BIDIRECTIONAL, groupAddress6, groupL2Address);
     }
 
+    
+
   NS_LOG_INFO ("Creating applications...");
   ApplicationContainer clientApps;
   McpttHelper mcpttHelper;
+
   if (enableNsLogs)
     {
       mcpttHelper.EnableLogComponents ();
@@ -288,7 +292,6 @@ Ptr<McpttPusher> ueAPusher = ueAPttApp->GetPusher ();
 Ptr<McpttMediaSrc> ueAMediaSrc = ueAPttApp->GetMediaSrc ();
 
 Simulator::Schedule (Seconds (2.2), &McpttPttApp::TakePushNotification, ueAPttApp);
-
 
 //Set Sidelink bearers
 proseHelper->ActivateSidelinkBearer (slBearersActivationTime, ueDevs, tft);
