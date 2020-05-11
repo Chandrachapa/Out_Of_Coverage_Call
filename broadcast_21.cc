@@ -227,14 +227,7 @@ int main (int argc, char *argv[])
   Ptr<Node> remoteHost = remoteHostContainer.Get (0);
   InternetStackHelper internet;
   internet.Install (remoteHostContainer);
-
-  // Create the Internet
-  PointToPointHelper p2ph;
-  p2ph.SetDeviceAttribute ("DataRate", DataRateValue (DataRate ("100Gb/s")));
-  p2ph.SetDeviceAttribute ("Mtu", UintegerValue (1500));
-  p2ph.SetChannelAttribute ("Delay", TimeValue (Seconds (0.010)));
-  NetDeviceContainer internetDevices = p2ph.Install (pgw, remoteHost);// p2p is installed between  3 and 0 nodes 
-  std::cout << pgw->GetId () << std::endl;
+  
 
   //Create nodes (eNb + UEs)
   NodeContainer enbNode;
@@ -244,6 +237,22 @@ int main (int argc, char *argv[])
   ueNodes.Create (2);
  // NS_LOG_INFO ("UE 1 node id = [" << ueNodes.Get (0)->GetId () << "]");
  // NS_LOG_INFO ("UE 2 node id = [" << ueNodes.Get (1)->GetId () << "]");
+
+  Ptr<Node> remoteUE = ueNodes.Get(0);
+  Ptr<Node> relayUE = ueNodes.Get(1);
+  PointToPointHelper p2p_;
+  p2p_.SetDeviceAttribute ("DataRate", DataRateValue (DataRate ("100Gb/s")));
+  p2p_.SetDeviceAttribute ("Mtu", UintegerValue (1500));
+  p2p_.SetChannelAttribute ("Delay", TimeValue (Seconds (0.010)));
+  NetDeviceContainer internetDevices_ = p2p_.Install (remoteUE, relayUE);
+
+  // Create the Internet
+  PointToPointHelper p2ph;
+  p2ph.SetDeviceAttribute ("DataRate", DataRateValue (DataRate ("100Gb/s")));
+  p2ph.SetDeviceAttribute ("Mtu", UintegerValue (1500));
+  p2ph.SetChannelAttribute ("Delay", TimeValue (Seconds (0.010)));
+  NetDeviceContainer internetDevices = p2ph.Install (pgw, remoteHost);// p2p is installed between  3 and 0 nodes 
+  std::cout << pgw->GetId () << std::endl;
 
   //Position of the nodes
   //eNodeB
@@ -448,11 +457,12 @@ int main (int argc, char *argv[])
 
   //Attach the relay UE to the eNodeB
   lteHelper->Attach (ueDevs.Get (0));
+  //  lteHelper->Attach (ueDevs.Get (1));
   //If not using relay, attach the remote to the eNodeB as well
-  if (!useRelay)
-    {
-      lteHelper->Attach (ueDevs.Get (1));
-    }
+  // if (!useRelay)
+  //   {
+  //     lteHelper->Attach (ueDevs.Get (1));
+  //   }
 
   // interface 0 is localhost, 1 is the p2p device
   Ipv6Address pgwAddr = internetIpIfaces.GetAddress (0,1);
@@ -465,7 +475,8 @@ int main (int argc, char *argv[])
   std::cout << "relay ue address : " << relayUeaddress << std::endl;
 
   uint16_t echoPort = 8000;
-
+  
+  uint16_t echoPort2 = 9000;
   //Set echo server in the remote host
 
   UdpEchoServerHelper echoServer (echoPort);
@@ -476,7 +487,7 @@ int main (int argc, char *argv[])
   std::cout << remoteHost->GetId () << std::endl;
 
   //Set echo client in the UEs
-  UdpEchoClientHelper echoClient (remoteHostAddr, echoPort);
+  UdpEchoClientHelper echoClient (relayUeaddress, echoPort);
   echoClient.SetAttribute ("MaxPackets", UintegerValue (20));
   echoClient.SetAttribute ("Interval", TimeValue (Seconds (0.5)));
   echoClient.SetAttribute ("PacketSize", UintegerValue (200));
@@ -485,6 +496,18 @@ int main (int argc, char *argv[])
   clientApps = echoClient.Install (ueNodes.Get (1)); //Only the remote UE will have traffic
   clientApps.Start (Seconds (2.0));
   clientApps.Stop (simTime);
+
+
+  //Set echo client in the UEs
+  UdpEchoClientHelper echoClient2 (remoteUeaddress, echoPort2);
+  echoClient.SetAttribute ("MaxPackets", UintegerValue (20));
+  echoClient.SetAttribute ("Interval", TimeValue (Seconds (0.5)));
+  echoClient.SetAttribute ("PacketSize", UintegerValue (200));
+
+  ApplicationContainer clientApps_;
+  clientApps_ = echoClient2.Install (ueNodes.Get (0)); //Only the remote UE will have traffic
+  clientApps_.Start (Seconds (2.0));
+  clientApps_.Stop (simTime);
 
 //NS_LOG_INFO ("Creating applications...");
 
@@ -527,9 +550,55 @@ mcpttclientApps.Add (mcpttHelper.Install (ueNodes));
 mcpttclientApps.Start (startTime);
 mcpttclientApps.Stop (stopTime);
 
+ObjectFactory callFac;
+callFac.SetTypeId ("ns3::McpttCallMachineGrpBroadcast");
 
+ObjectFactory floorFac;
+floorFac.SetTypeId ("ns3::McpttFloorMachineBasic");
+  
+Ipv4AddressValue grpAddr;
 
+//creating location to store application info of UEs A, B 
+Ptr<McpttPttApp> ueAPttApp = DynamicCast<McpttPttApp, Application> (mcpttclientApps.Get (0));
+// Ptr<McpttPttApp> ueBPttApp = DynamicCast<McpttPttApp, Application> (clientApps.Get (1));
+// Ptr<McpttPttApp> ueCPttApp = DynamicCast<McpttPttApp, Application> (clientApps.Get (2));
 
+//   //UE A
+//   uint32_t grpId = 1;
+//   uint16_t callId = 1;
+  
+// //McpttCallMsgFieldUserLoc m_userLoc;
+
+//   //UE B 
+//   std::string orgName = "EMS";
+//   Time joinTime = Seconds (2.2);
+//   uint32_t origId = ueAPttApp->GetUserId ();
+  int no_devices = ueAPttApp->GetNode()->GetNDevices();
+for (int i=0;i<no_devices;i++){
+
+  std::cout << "A address" << ueAPttApp->GetNode()->GetDevice(i)->GetAddress() << std::endl;
+
+}
+
+  //fix this // device ekka id within the range 
+  // 0.0.0.0
+
+  // McpttCallMsgFieldSdp sdp;
+  // sdp.SetFloorPort (floorPort);
+  // sdp.SetGrpAddr (grpAddress.Get ());
+  // //sdp.SetOrigAddr (origAddress);
+  // sdp.SetSpeechPort (speechPort);
+
+ 
+//floor and call machines generate*******************************
+ueAPttApp->CreateCall (callFac, floorFac);
+ueAPttApp->SelectLastCall ();
+// ueBPttApp->CreateCall (callFac, floorFac);
+// ueBPttApp->SelectLastCall ();
+// ueCPttApp->CreateCall (callFac, floorFac);
+// ueCPttApp->SelectLastCall ();
+
+ Simulator::Schedule (Seconds (2.2), &McpttPttApp::TakePushNotification, ueAPttApp);
   ///*** End of application configuration ***///
 
 

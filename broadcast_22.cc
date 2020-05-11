@@ -1,4 +1,3 @@
-
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
 #include "ns3/applications-module.h"
@@ -21,7 +20,6 @@
 #include <iostream>
 #include <ns3/mcptt-floor-msg.h>
 #include <ns3/mcptt-floor-msg-field.h>
-#include "ns3/ipv4-l3-protocol.h"
 
 using namespace ns3;
 //using namespace psc;
@@ -29,22 +27,9 @@ using namespace ns3;
 //initial environment :initial parameter configurations 
 NS_LOG_COMPONENT_DEFINE ("broadcast_call_technique");
 
-//waiting time 
-double
-waiting_time (double own_snr, double loc_accuracy, double other_device_snr, bool incoverage, double mySoc, double T_cycle )
-{
-double result;
-if (mySoc < 20){
-result = 1/(loc_accuracy +0.1)*(own_snr/other_device_snr)*(1/(incoverage+0.1))*(20/(mySoc))*T_cycle ; 
-}
-else {
-result = 1/(loc_accuracy +0.1)*(own_snr/other_device_snr)*(1/(incoverage+0.1))*(20/20)*T_cycle;
-}
-return result;
-}
+//virtual void ReceiveFloorRelease (const McpttFloorMsgRelease& msg);
+//virtual void Send (const McpttFloorMsg& msg);
 
-
-//packet trace 
 void
 UePacketTrace (Ptr<OutputStreamWrapper> stream, const Address &localAddrs, std::string context, Ptr<const Packet> p, const Address &srcAddrs, const Address &dstAddrs)
 {
@@ -99,12 +84,53 @@ UePacketTrace (Ptr<OutputStreamWrapper> stream, const Address &localAddrs, std::
 }
 
 
+class BroadcastTestCallMachine : public McpttCallMachineGrpBroadcast
+{
+public:
+ static TypeId GetTypeId (void);
+ BroadcastTestCallMachine (void);
+ virtual ~BroadcastTestCallMachine (void);
+ virtual void ChangeState (Ptr<McpttCallMachineGrpBroadcastState>  newState);
+ virtual TypeId GetInstanceTypeId (void) const;
+ virtual void Receive (const McpttCallMsg& msg);
+ virtual void Start (void);
+ virtual void Send (const McpttCallMsg& msg);
+protected:
+ virtual void ExpiryOfTfb1 (void);
+ virtual void ExpiryOfTfb2 (void);
+ virtual void ExpiryOfTfb3 (void);
+private:
+ Callback<void, const BroadcastTestCallMachine&, const McpttCallMsg&> m_postRxCb;
+ Callback<void, const BroadcastTestCallMachine&, const McpttTimer&> m_postTimerExpCb;
+ Callback<void, const BroadcastTestCallMachine&, const McpttCallMsg&> m_postTxCb;
+ Callback<void, const BroadcastTestCallMachine&, const McpttCallMsg&> m_preRxCb;
+ Callback<void, const BroadcastTestCallMachine&, const McpttTimer&> m_preTimerExpCb;
+ Callback<void, const BroadcastTestCallMachine&, const McpttCallMsg&> m_preTxCb;
+ Ptr<McpttCallMachineGrpBroadcastState> m_startState;
+ Callback<void, const BroadcastTestCallMachine&, Ptr<McpttCallMachineGrpBroadcastState> , Ptr<McpttCallMachineGrpBroadcastState> > m_stateChangeCb;
+public:
+ virtual Callback<void, const BroadcastTestCallMachine&, const McpttCallMsg&> GetPostRxCb (void) const;
+ virtual Callback<void, const BroadcastTestCallMachine&, const McpttTimer&> GetPostTimerExpCb (void) const;
+ virtual Callback<void, const BroadcastTestCallMachine&, const McpttCallMsg&> GetPostTxCb (void) const;
+ virtual Callback<void, const BroadcastTestCallMachine&, const McpttCallMsg&> GetPreRxCb (void) const;
+ virtual Callback<void, const BroadcastTestCallMachine&, const McpttTimer&> GetPreTimerExpCb (void) const;
+ virtual Callback<void, const BroadcastTestCallMachine&, const McpttCallMsg&> GetPreTxCb (void) const;
+ virtual Ptr<McpttCallMachineGrpBroadcastState> GetStartState(void) const;
+ virtual Callback<void, const BroadcastTestCallMachine&, Ptr<McpttCallMachineGrpBroadcastState> , Ptr<McpttCallMachineGrpBroadcastState> > GetStateChangeCb (void) const;
+ virtual void SetPostRxCb (const Callback<void, const BroadcastTestCallMachine&, const McpttCallMsg&>  postRxCb);
+ virtual void SetPostTimerExpCb (const Callback<void, const BroadcastTestCallMachine&, const McpttTimer&>  timerExpCb);
+ virtual void SetPostTxCb (const Callback<void, const BroadcastTestCallMachine&, const McpttCallMsg&>  postTxCb);
+ virtual void SetPreRxCb (const Callback<void, const BroadcastTestCallMachine&, const McpttCallMsg&>  preRxCb);
+ virtual void SetPreTimerExpCb (const Callback<void, const BroadcastTestCallMachine&, const McpttTimer&>  timerExpCb);
+ virtual void SetPreTxCb (const Callback<void, const BroadcastTestCallMachine&, const McpttCallMsg&>  preTxCb);
+ virtual void SetStartState (Ptr<McpttCallMachineGrpBroadcastState>  startState);
+ virtual void SetStateChangeTestCb (const Callback<void, const BroadcastTestCallMachine&, Ptr<McpttCallMachineGrpBroadcastState> , Ptr<McpttCallMachineGrpBroadcastState> >  stateChangeCb);
+};
+
+
 
 int main (int argc, char *argv[])
 {
-  
-bool useRelay = false;
-
 
 // MCPTT configuration
 //variable declarations for using push to talk 
@@ -123,15 +149,13 @@ Time startTime = Seconds (1);
 Time stopTime = Seconds (30);
 TypeId socketFacTid = UdpSocketFactory::GetTypeId ();
 //uint32_t groupId = 1;
-//Ipv4Address peerAddress = Ipv4Address ("255.255.255.255");
+Ipv4Address peerAddress = Ipv4Address ("255.255.255.255");
 appCount = usersPerGroup * groupcount;
-// uint8_t        m_hopCount;
-
 
 uint16_t floorPort = McpttPttApp::AllocateNextPortNumber ();
 uint16_t speechPort = McpttPttApp::AllocateNextPortNumber ();
 Ipv4AddressValue grpAddress;
-//bool remoteUesOoc = true;
+
 
 // set config for floor request and call generation
 //McpttFloorMsgFieldSsrc ssrc;
@@ -156,21 +180,12 @@ TracedCallback<uint32_t, uint32_t, const std::string&, const std::string&, const
 Time delayTfb1 = Seconds(10);
 Time delayTfb2 = Seconds(5);
 Time delayTfb3 = Seconds(5);
-/*************************************************************/
 
 //Physical layer 
 
 //creating 3 nodes
-  NodeContainer nodes;
-  nodes.Create(appCount);
-  std::cout << "ue is :" << nodes.Get(0)->GetId() << std::endl;
-  std::cout << "ue is :" << nodes.Get(1)->GetId() << std::endl;
-  std::cout << "ue is :" << nodes.Get(2)->GetId() << std::endl;
-
-  NodeContainer gnBnode;
-  gnBnode.Create(1);
-
-  std::cout << "gnB is :" << gnBnode.Get(0)->GetId() << std::endl;
+NodeContainer nodes;
+nodes.Create (appCount);
 
 //positioning nodes
 NS_LOG_INFO ("Building physical topology...");
@@ -190,16 +205,6 @@ Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> (
       positionAlloc->Add (position);
     }
 
- //eNodeB
-  Ptr<ListPositionAllocator> positionAllocGnb = CreateObject<ListPositionAllocator> ();
-  positionAllocGnb->Add (Vector (0.0, 0.0, 30.0));
-
-  //eNodeB
-  MobilityHelper mobilityeNodeB;
-  mobilityeNodeB.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-  mobilityeNodeB.SetPositionAllocator (positionAllocGnb);
-  mobilityeNodeB.Install (gnBnode);
-
 
 //mobility of nodes set to stationary
 MobilityHelper mobility;
@@ -207,19 +212,13 @@ mobility.SetPositionAllocator (positionAlloc);
 mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
 mobility.Install (nodes);
 
-//AsciiTraceHelper ascii;
-//mobility.EnableAsciiAll (ascii.CreateFileStream ("MobilityTrace.txt"));
-
-/********************************************************************/
-
 //sidelink pre-configuration
 //Configure the UE for UE_SELECTED scenario
-Config::SetDefault ("ns3::LteUeMac::SlGrantMcs", UintegerValue (8));
+Config::SetDefault ("ns3::LteUeMac::SlGrantMcs", UintegerValue (16));
 Config::SetDefault ("ns3::LteUeMac::SlGrantSize", UintegerValue (5)); //The number of RBs allocated per UE for Sidelink
 Config::SetDefault ("ns3::LteUeMac::Ktrp", UintegerValue (1));
 Config::SetDefault ("ns3::LteUeMac::UseSetTrp", BooleanValue (true)); //use default Trp index of 0
-//Config::SetDefault ("ns3::LteUeMac::SlScheduler", StringValue ("MaxCoverage")); //Values include Fixed, Random, MinPrb, MaxCoverage
-Config::SetDefault ("ns3::RrSlFfMacScheduler::Itrp", UintegerValue (0));
+
 //for tracing
 Config::SetDefault ("ns3::McpttMsgStats::CallControl", BooleanValue (true));
 Config::SetDefault ("ns3::McpttMsgStats::FloorControl", BooleanValue (true));
@@ -234,11 +233,14 @@ uint16_t ulBandwidth = 50;
 // Set error models
 Config::SetDefault ("ns3::LteSpectrumPhy::SlCtrlErrorModelEnabled", BooleanValue (true));
 Config::SetDefault ("ns3::LteSpectrumPhy::SlDataErrorModelEnabled", BooleanValue (true));
-Config::SetDefault ("ns3::LteSpectrumPhy::DropRbOnCollisionEnabled", BooleanValue (true));
-  
+Config::SetDefault ("ns3::LteSpectrumPhy::DropRbOnCollisionEnabled", BooleanValue (false));
+
 //Set the UEs power in dBm
 Config::SetDefault ("ns3::LteUePhy::TxPower", DoubleValue (23.0));
 
+//cmd.AddValue ("simTime", "Total duration of the simulation", simTime);
+//cmd.AddValue ("enableNsLogs", "Enable ns-3 logging (debug builds)", enableNsLogs);
+//cmd.Parse (argc, argv);
 
 //Sidelink bearers activation time
 //Time slBearersActivationTime = startTime;
@@ -275,8 +277,8 @@ bool ulFreqOk = uplinkPathlossModel->SetAttributeFailSafe ("Frequency", DoubleVa
     {
       NS_LOG_WARN ("UL propagation model does not have a Frequency attribute");
     }
-NetDeviceContainer devices;
- // NetDeviceContainer devices = lteHelper->InstallUeDevice (nodes);
+
+//NetDeviceContainer devices = lteHelper->InstallUeDevice (nodes);
 Ptr<LteSlUeRrc> ueSidelinkConfiguration = CreateObject<LteSlUeRrc> ();
 ueSidelinkConfiguration->SetSlEnabled (true);
 
@@ -294,12 +296,12 @@ preconfiguration.preconfigDisc = proseHelper->GetDefaultSlPreconfigDiscPoolList 
 
 //-Configure preconfigured UE-to-Network Relay parameters
 preconfiguration.preconfigRelay = proseHelper->GetDefaultSlPreconfigRelay ();
-  
+
 //-Enable discovery
 ueSidelinkConfiguration->SetDiscEnabled (true);
 //-Set frequency for discovery messages monitoring //this is for another scenario with remote host
 //ueSidelinkConfiguration->SetDiscInterFreq (ueDevs.Get (0)->GetObject<LteEnbNetDevice> ()->GetUlEarfcn ());
-  
+
 LteRrcSap::SlCommTxResourcesSetup pool;
 pool.setup = LteRrcSap::SlCommTxResourcesSetup::UE_SELECTED;
 pool.ueSelected.havePoolToRelease = false;
@@ -329,73 +331,17 @@ pfactory.SetDataPrbEnd (49);
 preconfiguration.preconfigComm.pools[0] = pfactory.CreatePool ();
 pfactory.SetHaveUeSelectedResourceConfig (true);
 
-
-  //NetDeviceContainer relayUeDevs = lteHelper->InstallUeDevice (relayUeNodes);
-  //NetDeviceContainer remoteUeDevs = lteHelper->InstallUeDevice (remoteUeNodes);
- //devices =lteHelper->InstallUeDevice (nodes);
-
+NetDeviceContainer devices;
 ueSidelinkConfiguration->SetSlPreconfiguration (preconfiguration);
 lteHelper->InstallSidelinkConfiguration (devices, ueSidelinkConfiguration);
-    LteRrcSap::SlPreconfiguration preconfigurationRemote;
-  LteRrcSap::SlPreconfiguration preconfigurationRelay;
-
-  if (useRelay)
-    {
-      //General
-      preconfigurationRemote.preconfigGeneral.carrierFreq = 23330;
-      preconfigurationRemote.preconfigGeneral.slBandwidth = 50;
-
-      //Discovery
-      preconfigurationRemote.preconfigDisc.nbPools = 1;
-      LteSlDiscPreconfigPoolFactory preconfDiscPoolFactory;
-      preconfDiscPoolFactory.SetDiscCpLen ("NORMAL");
-      preconfDiscPoolFactory.SetDiscPeriod ("rf32");
-      preconfDiscPoolFactory.SetNumRetx (0);
-      preconfDiscPoolFactory.SetNumRepetition (1);
-      preconfDiscPoolFactory.SetDiscPrbNum (10);
-      preconfDiscPoolFactory.SetDiscPrbStart (10);
-      preconfDiscPoolFactory.SetDiscPrbEnd (40);
-      preconfDiscPoolFactory.SetDiscOffset (0);
-      preconfDiscPoolFactory.SetDiscBitmap (0x11111);
-      preconfDiscPoolFactory.SetDiscTxProbability ("p100");
-
-      preconfigurationRemote.preconfigDisc.pools[0] = preconfDiscPoolFactory.CreatePool ();
-
-      //Communication
-      preconfigurationRemote.preconfigComm.nbPools = 1;
-      LteSlPreconfigPoolFactory preconfCommPoolFactory;
-      //-Control
-      preconfCommPoolFactory.SetControlPeriod ("sf40");
-      preconfCommPoolFactory.SetControlBitmap (0x00000000FF); //8 subframes for PSCCH
-      preconfCommPoolFactory.SetControlOffset (0);
-      preconfCommPoolFactory.SetControlPrbNum (22);
-      preconfCommPoolFactory.SetControlPrbStart (0);
-      preconfCommPoolFactory.SetControlPrbEnd (49);
-      //-Data
-      preconfCommPoolFactory.SetDataBitmap (0xFFFFFFFFFF);
-      preconfCommPoolFactory.SetDataOffset (8); //After 8 subframes of PSCCH
-      preconfCommPoolFactory.SetDataPrbNum (25);
-      preconfCommPoolFactory.SetDataPrbStart (0);
-      preconfCommPoolFactory.SetDataPrbEnd (49);
-
-      preconfigurationRemote.preconfigComm.pools[0] = preconfCommPoolFactory.CreatePool ();
-
-      //-Relay UE (re)selection
-      preconfigurationRemote.preconfigRelay.haveReselectionInfoOoc = true;
-      preconfigurationRemote.preconfigRelay.reselectionInfoOoc.filterCoefficient = 0;
-      preconfigurationRemote.preconfigRelay.reselectionInfoOoc.minHyst = 0;
-      preconfigurationRemote.preconfigRelay.reselectionInfoOoc.qRxLevMin = -125;
-    }
-
 
 /*Network layer***************************************************************************************/
 //installing wifi interface in nodes
-
 // WifiHelper wifi;
 // wifi.SetStandard (WIFI_PHY_STANDARD_80211g); //2.4Ghz
 // wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager",
 //                                 "DataMode", StringValue ("ErpOfdmRate54Mbps"));
- 
+
 // WifiMacHelper wifiMac;
 // YansWifiPhyHelper wifiPhy = YansWifiPhyHelper::Default ();
 // YansWifiChannelHelper wifiChannel;
@@ -410,175 +356,48 @@ lteHelper->InstallSidelinkConfiguration (devices, ueSidelinkConfiguration);
 
 // WifiMacHelper mac = wifiMac;
 // devices = wifi.Install (phy, mac, nodes);
-
+lteHelper->InstallUeDevice(nodes);
 //installing internet access to all nodes
 NS_LOG_INFO ("Installing internet stack on all nodes...");
 InternetStackHelper internet;
 internet.Install (nodes);
 
-  // Ipv4InterfaceContainer ueIpIface;
-  // ueIpIface = epcHelper->AssignUeIpv4Address (NetDeviceContainer (devices));
-
-  // //Assign IP address to UEs, and install applications
-  // Ipv4StaticRoutingHelper ipv4RoutingHelper;
-  // for (uint32_t u = 0; u < nodes.GetN (); ++u)
-  //   {
-  //     Ptr<Node> ueNode = nodes.Get (u);
-  //     // Set the default gateway for the UE
-  //     Ptr<Ipv4StaticRouting> ueStaticRouting = ipv4RoutingHelper.GetStaticRouting (ueNode->GetObject<Ipv4> ());
-  //     ueStaticRouting->SetDefaultRoute (epcHelper->GetUeDefaultGatewayAddress (), 1);
-  //   }
-
-
-
 // assigning ip addresses to all devices of nodes
 NS_LOG_INFO ("Assigning IP addresses to each net device...");
-
-
-  // uint32_t groupL2Address = 255;
-  Ipv4AddressHelper ipv4;
-  ipv4.SetBase ("10.1.1.0", "255.255.255.0");
-  Ipv4Address groupAddress4 = Ipv4Address ("255.255.255.255");
- // Ipv4Address groupAddress4("225.0.0.0");
-  //Ipv4Address groupAddress4 ("225.0.0.0");     //use multicast address as destination
-  Ipv6Address groupAddress6 ("ff0e::1");     //use multicast address as destination
-  Address remoteAddress;
-  Address localAddress;
-  Ptr<LteSlTft> tft;
-  // bool useIPv6 = false;
-
-Ipv4InterfaceContainer i = ipv4.Assign (devices);
-
-
-  // if (!useIPv6)
-  //   {
-  //     Ipv4InterfaceContainer ueIpIface;
-  //     ueIpIface = epcHelper->AssignUeIpv4Address (NetDeviceContainer (devices));
-
-  //     // set the default gateway for the UE
-  //     Ipv4StaticRoutingHelper ipv4RoutingHelper;
-  //     for (uint32_t u = 0; u < nodes.GetN (); ++u)
-  //       {
-  //         Ptr<Node> ueNode = nodes.Get (u);
-  //         // Set the default gateway for the UE
-  //         Ptr<Ipv4StaticRouting> ueStaticRouting = ipv4RoutingHelper.GetStaticRouting (ueNode->GetObject<Ipv4> ());
-  //         ueStaticRouting->SetDefaultRoute (epcHelper->GetUeDefaultGatewayAddress (), 1);
-  //       }
-  //     remoteAddress = InetSocketAddress (groupAddress4, 8000);
-  //     localAddress = InetSocketAddress (Ipv4Address::GetAny (), 8000);
-  //     tft = Create<LteSlTft> (LteSlTft::BIDIRECTIONAL, groupAddress4, groupL2Address);
-  //   }
-  // else
-  //   {
-  //     Ipv6InterfaceContainer ueIpIface;
-  //     ueIpIface = epcHelper->AssignUeIpv6Address (NetDeviceContainer (devices));
-
-  //     // set the default gateway for the UE
-  //     Ipv6StaticRoutingHelper ipv6RoutingHelper;
-  //     for (uint32_t u = 0; u < nodes.GetN (); ++u)
-  //       {
-  //         Ptr<Node> ueNode = nodes.Get (u);
-  //         // Set the default gateway for the UE
-  //         Ptr<Ipv6StaticRouting> ueStaticRouting = ipv6RoutingHelper.GetStaticRouting (ueNode->GetObject<Ipv6> ());
-  //         ueStaticRouting->SetDefaultRoute (epcHelper->GetUeDefaultGatewayAddress6 (), 1);
-  //       }
-  //     remoteAddress = Inet6SocketAddress (groupAddress6, 8000);
-  //     localAddress = Inet6SocketAddress (Ipv6Address::GetAny (), 8000);
-  //     tft = Create<LteSlTft> (LteSlTft::BIDIRECTIONAL, groupAddress6, groupL2Address);
-  //   }
-
-
-  // Ipv6AddressHelper ipv6h;
-  // ipv6h.SetBase (Ipv6Address ("6001:db80::"), Ipv6Prefix (64));
-  // //Ipv6InterfaceContainer internetIpIfaces = ipv6h.Assign (internetDevices);
-  // Ipv6InterfaceContainer internet_uedevices = ipv6h.Assign (devices);
-  //  internet_uedevices.SetForwarding (0, true);
-  //  internet_uedevices.SetDefaultRouteInAllNodes (0);
-  //   if (!useRelay)
-  //   {
-  //     lteHelper->Attach (devices.Get (1));
-  //   }
-
-
-  // Ipv6Address remoteUeaddress =  internet_uedevices.GetAddress(0,1);
-  // Ipv6Address relayUeaddress =  internet_uedevices.GetAddress(1,1);
- 
-  // std::cout << "remote ue address : " << remoteUeaddress << std::endl;
-  // std::cout << "relay ue address : " << relayUeaddress << std::endl;
-
-  
-
-/*****************************
-
-
 Ipv4AddressHelper ipv4;
 ipv4.SetBase ("10.1.1.0", "255.255.255.0");
-Ipv4InterfaceContainer i = ipv4.Assign (devices);*/
- 
+Ipv4InterfaceContainer i = ipv4.Assign (devices);
 ns3::PacketMetadata::Enable ();
 /*Application layer*************************************************************************************/
 
-// NS_LOG_INFO ("Creating applications...");
-// uint16_t echoPort = 8000;
-
-//   //Set echo server in the remote host
-
-//   UdpEchoServerHelper echoServer (echoPort);
-//   ApplicationContainer serverApps = echoServer.Install (nodes);
-//   serverApps.Start (Seconds (1.0));
-//   serverApps.Stop (stopTime);
-
-//   //std::cout << remoteHost->GetId () << std::endl;
-
-//   //Set echo client in the UEs
-//   UdpEchoClientHelper echoClient (remoteUeaddress, echoPort);
-//   echoClient.SetAttribute ("MaxPackets", UintegerValue (20));
-//   echoClient.SetAttribute ("Interval", TimeValue (Seconds (0.5)));
-//   echoClient.SetAttribute ("PacketSize", UintegerValue (200));
-
-//   ApplicationContainer udpclientApps;
-//   udpclientApps = echoClient.Install (nodes.Get (1)); //Only the remote UE will have traffic
-//   udpclientApps.Start (Seconds (2.0));
-//   udpclientApps.Stop (stopTime);
-
+NS_LOG_INFO ("Creating applications...");
 //creating mcptt application for each device 
-McpttHelper mcpttHelper;
+
 ApplicationContainer clientApps;
-
+McpttHelper mcpttHelper;
 McpttTimer mcpttTimer;
-  
-//creating mcptt service on each node
 
-mcpttHelper.SetPttApp ("ns3::McpttPttApp",
-                        "PeerAddress", Ipv4AddressValue (groupAddress4), 
-                        "PushOnStart", BooleanValue (true));
-mcpttHelper.SetMediaSrc ("ns3::McpttMediaSrc",
-                        "Bytes", UintegerValue (msgSize),
-                        "DataRate", DataRateValue (dataRate));
-mcpttHelper.SetPusher ("ns3::McpttPusher",
-                        "Automatic", BooleanValue (false));
-mcpttHelper.SetPusherPushVariable ("ns3::NormalRandomVariable",
-                        "Mean", DoubleValue (pushTimeMean),
-                        "Variance", DoubleValue (pushTimeVariance));
-mcpttHelper.SetPusherReleaseVariable ("ns3::NormalRandomVariable",
-                        "Mean", DoubleValue (releaseTimeMean),
-                        "Variance", DoubleValue (releaseTimeVariance));
+  //creating mcptt service on each node
+  clientApps.Add (mcpttHelper.Install (nodes));
 
-mcpttHelper.EnableStateMachineTraces();       
+  clientApps.Start (startTime);
+  clientApps.Stop (stopTime);
 
-clientApps.Add (mcpttHelper.Install (nodes));
-clientApps.Start (startTime);
-clientApps.Stop (stopTime);
+  mcpttHelper.SetPttApp ("ns3::McpttPttApp",
+                         "PeerAddress", Ipv4AddressValue (peerAddress),
+                         "PushOnStart", BooleanValue (true));
+  mcpttHelper.SetMediaSrc ("ns3::McpttMediaSrc",
+                         "Bytes", UintegerValue (msgSize),
+                         "DataRate", DataRateValue (dataRate));
+  mcpttHelper.SetPusher ("ns3::McpttPusher",
+                         "Automatic", BooleanValue (false));
+  mcpttHelper.SetPusherPushVariable ("ns3::NormalRandomVariable",
+                         "Mean", DoubleValue (pushTimeMean),
+                         "Variance", DoubleValue (pushTimeVariance));
+  mcpttHelper.SetPusherReleaseVariable ("ns3::NormalRandomVariable",
+                         "Mean", DoubleValue (releaseTimeMean),
+                         "Variance", DoubleValue (releaseTimeVariance));
 
-/*
-// PacketSinkHelper sidelinkSink ("ns3::UdpSocketFactory", localAddress);
-// ApplicationContainer serverApps = sidelinkSink.Install (nodes.Get (1));
-// serverApps.Start (startTime);
-// serverApps.Stop (stopTime);
-*/
-
-  //Set Sidelink bearers
-  //proseHelper->ActivateSidelinkBearer (Seconds(startTime), devices, tft);
 
 /*Call flow process************************************************************************************/
 
@@ -592,7 +411,7 @@ callFac.SetTypeId ("ns3::McpttCallMachineGrpBroadcast");
 
 ObjectFactory floorFac;
 floorFac.SetTypeId ("ns3::McpttFloorMachineBasic");
-  
+
 Ipv4AddressValue grpAddr;
 
 //creating location to store application info of UEs A, B 
@@ -603,30 +422,35 @@ Ptr<McpttPttApp> ueCPttApp = DynamicCast<McpttPttApp, Application> (clientApps.G
   //UE A
   uint32_t grpId = 1;
   uint16_t callId = 1;
-  
-//McpttCallMsgFieldUserLoc m_userLoc;
+
+
 
   //UE B 
+
+
   std::string orgName = "EMS";
   Time joinTime = Seconds (2.2);
   uint32_t origId = ueAPttApp->GetUserId ();
-  int no_devices = ueAPttApp->GetNode()->GetNDevices();
-for (int i=0;i<no_devices;i++){
+  Ipv4Address origAddress = ueBPttApp->GetLocalAddress ();
 
-  std::cout << "A address" << ueAPttApp->GetNode()->GetDevice(i)->GetAddress() << std::endl;
-
-}
-
-  //fix this // device ekka id within the range 
-  // 0.0.0.0
+  ueBPttApp->GetAttribute ("PeerAddress", grpAddress);
 
   McpttCallMsgFieldSdp sdp;
   sdp.SetFloorPort (floorPort);
   sdp.SetGrpAddr (grpAddress.Get ());
-  //sdp.SetOrigAddr (origAddress);
+  sdp.SetOrigAddr (origAddress);
   sdp.SetSpeechPort (speechPort);
+    //UE A
 
- 
+  //uint16_t BcallId = 2;
+  //uint32_t BorigId = ueBPttApp->GetUserId ();
+
+
+    //UE C
+
+  //uint16_t CcallId = 3;
+  //uint32_t CorigId = ueCPttApp->GetUserId ();
+
 //floor and call machines generate*******************************
 ueAPttApp->CreateCall (callFac, floorFac);
 ueAPttApp->SelectLastCall ();
@@ -655,10 +479,10 @@ Ptr<McpttCallMachineGrpBroadcast> Cbroadcastgroupmachine =  DynamicCast<McpttCal
   Abroadcastgroupmachine->SetSdp (sdp);
   Abroadcastgroupmachine->SetCallType (McpttCallMsgFieldCallType::BROADCAST_GROUP);
   Abroadcastgroupmachine->SetPriority (McpttCallMsgFieldCallType::GetCallTypePriority (McpttCallMsgFieldCallType::BROADCAST_GROUP));
-  
   McpttCallMachineGrpBroadcastStateB2::GetInstance ();
- 
-  // UE B
+
+
+    // UE B
   Bbroadcastgroupmachine ->SetCallId (callId);
   Bbroadcastgroupmachine ->SetGrpId (grpId);
   Bbroadcastgroupmachine ->SetOrigId (origId);
@@ -666,9 +490,9 @@ Ptr<McpttCallMachineGrpBroadcast> Cbroadcastgroupmachine =  DynamicCast<McpttCal
   Bbroadcastgroupmachine ->SetCallType (McpttCallMsgFieldCallType::BROADCAST_GROUP);
   Bbroadcastgroupmachine ->SetPriority (McpttCallMsgFieldCallType::GetCallTypePriority (McpttCallMsgFieldCallType::BROADCAST_GROUP));
   McpttCallMachineGrpBroadcastStateB2::GetInstance ();
- 
 
-  // UE C
+
+      // UE C
   Cbroadcastgroupmachine ->SetCallId (callId);
   Cbroadcastgroupmachine ->SetGrpId (grpId);
   Cbroadcastgroupmachine ->SetOrigId (origId);
@@ -677,11 +501,13 @@ Ptr<McpttCallMachineGrpBroadcast> Cbroadcastgroupmachine =  DynamicCast<McpttCal
   Cbroadcastgroupmachine ->SetPriority (McpttCallMsgFieldCallType::GetCallTypePriority (McpttCallMsgFieldCallType::BROADCAST_GROUP));
   McpttCallMachineGrpBroadcastStateB2::GetInstance ();
 
-  //push button press schedule
+
+//push button press schedule
+
 
   Simulator::Schedule (Seconds (2.2), &McpttPttApp::TakePushNotification, ueAPttApp);
   McpttCallMachineGrpBroadcastStateB1::GetStateId ();
-  McpttCallMachineGrpBroadcastStateB1::GetInstance ();
+
   Ptr<McpttChan> AcallChan = ueAPttApp->GetCallChan ();
   Ptr<McpttChan> BcallChan = ueBPttApp->GetCallChan ();
   Ptr<McpttChan> CcallChan = ueCPttApp->GetCallChan ();
@@ -693,7 +519,9 @@ Ptr<McpttCallMachineGrpBroadcast> Cbroadcastgroupmachine =  DynamicCast<McpttCal
   Abroadcastgroupmachine->SetSdp (sdp);
   Abroadcastgroupmachine->SetCallType (McpttCallMsgFieldCallType::BROADCAST_GROUP);
   Abroadcastgroupmachine->SetPriority (McpttCallMsgFieldCallType::GetCallTypePriority (McpttCallMsgFieldCallType::BROADCAST_GROUP));
-  
+
+
+  //m_startStatertState (McpttCallMachineGrpBroadcastStateB2::GetInstance ());
 
 Ptr<McpttPusher> ueAPusher = ueAPttApp->GetPusher ();
 Ptr<McpttPusher> ueBPusher = ueBPttApp->GetPusher ();
@@ -731,6 +559,35 @@ Ptr<McpttTimer> Ctfb1 =CbroadcastMachines.GetTfb1();
 Ptr<McpttTimer> Ctfb3 =CbroadcastMachines.GetTfb3();
 Ptr<McpttCallMachineGrpBroadcastState> stateC = CbroadcastMachines.GetState ();
 
+//Simulator::Schedule (Seconds (5.15), &McpttCall::OpenFloorChan, ueBCall, grpAddress.Get (), floorPort);
+
+
+/*McpttCallMsgGrpEmergAlert::McpttCallMsgGrpEmergAlert (void)
+  : McpttCallMsg (McpttCallMsgGrpEmergAlert::CODE),
+    m_grpId (McpttCallMsgFieldGrpId ()),
+    m_orgName (McpttCallMsgFieldOrgName ()),
+    m_userId (McpttCallMsgFieldUserId ()),
+    m_userLoc (McpttCallMsgFieldUserLoc ());
+*/
+
+  //floor request generate
+  //  ns3::McpttFloorMachine ns3::McpttFloorMachineBasic
+//ns3::McpttFloorMachineBasicState
+//ns3:McpttFloorMachineBasicStateHasPerm
+//ns3::McpttCallTypeMachine
+
+  //turn off floor control ns3::McpttFloorMachineNull
+  //
+  //ns3::McpttMsg
+  //ns3::McpttCallMsg
+  //ns3::McpttFloorMsg
+  //ns3::McpttFloorMsgRequest
+  //ns3::McpttFloorMsgFieldUserId
+
+  //ns3::McpttMediaMsg
+  //ns3::McpttCallMsg
+
+  //ns3::McpttFloorQueue ==0
 
 //generating floor control message 
   McpttFloorMsgFieldIndic indic = McpttFloorMsgFieldIndic ();
@@ -745,7 +602,7 @@ Ptr<McpttCallMachineGrpBroadcastState> stateC = CbroadcastMachines.GetState ();
 
   McpttFloorMsgFieldUserId id = McpttFloorMsgFieldUserId ();
   id.SetUserId (9);
-  
+
   McpttCallMsgFieldCallId call_Id;
   call_Id.SetCallId (callId);
 
@@ -760,13 +617,23 @@ Ptr<McpttCallMachineGrpBroadcastState> stateC = CbroadcastMachines.GetState ();
 
   McpttCallMsgFieldUserId lastChgUserId;
   lastChgUserId.SetId (15);
+ //SetUserLoc (const McpttCallMsgFieldUserLoc& userLoc)*************
 
+
+//******************************* 
+
+//send floor control info (SCI) share to all participants**************
+
+//relay : reception of SCI and decide to join the call
+
+
+//generate message************************************ 
+
+//Ptr<McpttTimer> ueATfb1 = ueAMachine->GetTfb1 ();
 Ptr<Packet> pkt = Create<Packet> ();
 pkt->AddHeader (msg);
+//callChan->Send (pkt);  
 
-
-//callChan->Send (pkt);  o
- 
 NS_LOG_LOGIC (Simulator::Now ().GetSeconds () << "s: PttApp sending " << msg << ".");
 
 
@@ -775,19 +642,18 @@ NS_LOG_LOGIC (Simulator::Now ().GetSeconds () << "s: PttApp sending " << msg << 
 //release button : send call***************************
   Simulator::Schedule (Seconds (2.1), &McpttTimer::Start, Atfb1);
   Simulator::Schedule (Seconds (2.1), &McpttTimer::Start, Atfb2);
-  Simulator::Schedule (Seconds (2.1), &McpttTimer::Start, Btfb1);
-  Simulator::Schedule (Seconds (2.1), &McpttTimer::Start, Ctfb1);
+    Simulator::Schedule (Seconds (2.1), &McpttTimer::Start, Btfb1);
+Simulator::Schedule (Seconds (2.1), &McpttTimer::Start, Ctfb1);
   McpttCallMachineGrpBroadcastStateB2::GetStateId ();
-  
+
   Simulator::Schedule (Seconds (2.15), &McpttCall::OpenFloorChan, ueACall, grpAddress.Get (), floorPort);
   Simulator::Schedule (Seconds (2.15), &McpttCall::OpenMediaChan, ueACall, grpAddress.Get (), speechPort);
   Simulator::Schedule (Seconds (2.15), &McpttCall::OpenFloorChan, ueBCall, grpAddress.Get (), floorPort);
   Simulator::Schedule (Seconds (2.15), &McpttCall::OpenMediaChan, ueBCall, grpAddress.Get (), speechPort);
   Simulator::Schedule (Seconds (2.15), &McpttCall::OpenFloorChan, ueCCall, grpAddress.Get (), floorPort);
   Simulator::Schedule (Seconds (2.15), &McpttCall::OpenMediaChan, ueCCall, grpAddress.Get (), speechPort);
-  
+
 //// synchronization and call in progress 
- //UdpEchoServer listening in the Remote UE port
 
 
 //end call
@@ -798,25 +664,26 @@ McpttCallMsgGrpBroadcastEnd Endmsg;
 //B, C receive end message
 BbroadcastMachines.ReceiveGrpCallBroadcastEnd(Endmsg);
 CbroadcastMachines.ReceiveGrpCallBroadcastEnd(Endmsg);
-Simulator::Schedule (Seconds (5.25), &McpttTimer::Stop, Atfb1);
-Simulator::Schedule (Seconds (5.25), &McpttTimer::Stop, Atfb2);
-Simulator::Schedule (Seconds (5.25), &McpttTimer::Stop, Btfb1);
+  Simulator::Schedule (Seconds (5.25), &McpttTimer::Stop, Atfb1);
+  Simulator::Schedule (Seconds (5.25), &McpttTimer::Stop, Atfb2);
+    Simulator::Schedule (Seconds (5.25), &McpttTimer::Stop, Btfb1);
 Simulator::Schedule (Seconds (5.25), &McpttTimer::Stop, Ctfb1);
 
 //Result generation*******************************************
+
 //Packets traces
 
 ns3::PacketMetadata::Enable ();
 AsciiTraceHelper ascii;
-Ptr<OutputStreamWrapper> stream = ascii.CreateFileStream ("b20.tr");
-//wifiPhy.EnableAsciiAll (stream);
-internet.EnableAsciiIpv4All (stream);
+ Ptr<OutputStreamWrapper> stream = ascii.CreateFileStream ("b20.tr");
+//   wifiPhy.EnableAsciiAll (stream);
+  internet.EnableAsciiIpv4All (stream);
 *stream->GetStream () << "time(sec)\ttx/rx\tC/S\tNodeID\tIP[src]\tIP[dst]\tPktSize(bytes)" << std::endl;
 
 
   AsciiTraceHelper ascii_wifi;
-  //wifiPhy.EnableAsciiAll (ascii_wifi.CreateFileStream ("wifi-packet-socket.tr"));
-  
+//   wifiPhy.EnableAsciiAll (ascii_wifi.CreateFileStream ("wifi-packet-socket.tr"));
+
 
   AsciiTraceHelper ascii_r;
   Ptr<OutputStreamWrapper> rtw = ascii_r.CreateFileStream ("routing_table");
@@ -830,34 +697,15 @@ internet.EnableAsciiIpv4All (stream);
 
   //Trace file table header
   *stream->GetStream () << "time(sec)\ttx/rx\tNodeID\tIMSI\tPktSize(bytes)\tIP[src]\tIP[dst]" << std::endl;
-  /*******************************************************/
-    //Packets traces
-  Ptr<OutputStreamWrapper> appStream = ascii.CreateFileStream ("AppPacketTrace.txt");
-  *appStream->GetStream () << "time(s)\ttx/rx\tNodeID\tIMSI\tPktSize(bytes)\tIP[src]\tIP[dst]" << std::endl;
-
-
-  auto localAddrs =  clientApps.Get(0)->GetNode()->GetObject<Ipv4L3Protocol> ();
-  std::cout << "ip address" << localAddrs << std::endl;
-  // //Upward: Tx by UE / Rx by Remote Host
-  // oss << "rx-RH\t" << serverApps.Get (0)->GetNode ()->GetId () << "\t" << "-";
-  // serverApps.Get (0)->TraceConnect ("RxWithAddresses", oss.str (), MakeBoundCallback (&UePacketTrace, appStream, localAddrs));
-  // oss.str ("");
-
-  // //Downward: Tx by Remote Host / Rx by UE
-  // oss << "tx-RH\t" << serverApps.Get (0)->GetNode ()->GetId () << "\t" << "-";
-  // serverApps.Get (0)->TraceConnect ("TxWithAddresses", oss.str (), MakeBoundCallback (&UePacketTrace, appStream, localAddrs));
-  // oss.str ("");
-
-
 
 NS_LOG_INFO ("Enabling MCPTT traces...");
 mcpttHelper.EnableMsgTraces ();
 mcpttHelper.EnableStateMachineTraces ();
-  
+
 NS_LOG_INFO ("Starting simulation...");
-AnimationInterface anim("b20.xml");
+AnimationInterface anim("b22.xml");
 anim.SetMaxPktsPerTraceFile(500000);
-std::cout << "okay" << std::endl;
+
 //Simulator::Stop (Seconds (stopTime));
 //anim.SetConstantPosition(nodes.Get(0),1.0,2.0);
 //anim.SetConstantPosition(nodes.Get(1),4.0,5.0);
@@ -868,5 +716,5 @@ NS_LOG_UNCOND ("Done Simulator");
 
 NS_LOG_INFO ("Done.");
 
-  
-}
+
+} 

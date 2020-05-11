@@ -47,6 +47,9 @@
 #include <math.h>
 #include "ns3/gnuplot.h"
 #include "ns3/netanim-module.h"
+#include <ns3/mcptt-helper.h>
+#include <ns3/wifi-module.h>
+
 
 using namespace ns3;
 
@@ -244,7 +247,7 @@ int main (int argc, char *argv[])
   double relayRadius = 300.0; //m
   double remoteRadius = 50.0; //m
   uint32_t nRelayUes = 2;
-  uint32_t nRemoteUesPerRelay = 2;
+  uint32_t nRemoteUesPerRelay = 5;
   bool remoteUesOoc = true;
   std::string echoServerNode ("RemoteUE");
 
@@ -256,9 +259,11 @@ int main (int argc, char *argv[])
   cmd.AddValue ("nRemoteUesPerRelay", "Number of Remote UEs per deployed Relay UE", nRemoteUesPerRelay);
   cmd.AddValue ("remoteUesOoc", "The Remote UEs are out-of-coverage", remoteUesOoc);
   cmd.AddValue ("echoServerNode", "The node towards which the Remote UE traffic is directed to (RemoteHost|RemoteUE)", echoServerNode);
-
   cmd.Parse (argc, argv);
 
+
+ 
+ 
   if (echoServerNode.compare ("RemoteHost") != 0 && echoServerNode.compare ("RemoteUE") != 0)
     {
       NS_FATAL_ERROR ("Wrong echoServerNode!. Options are (RemoteHost|RemoteUE).");
@@ -326,6 +331,13 @@ int main (int argc, char *argv[])
   Config::SetDefault ("ns3::LteEnbNetDevice::UlEarfcn", UintegerValue (23330));
   Config::SetDefault ("ns3::LteEnbNetDevice::DlBandwidth", UintegerValue (50));
   Config::SetDefault ("ns3::LteEnbNetDevice::UlBandwidth", UintegerValue (50));
+  
+   // Set error models
+  Config::SetDefault ("ns3::LteSpectrumPhy::SlCtrlErrorModelEnabled", BooleanValue (true));
+  Config::SetDefault ("ns3::LteSpectrumPhy::SlDataErrorModelEnabled", BooleanValue (true));
+  Config::SetDefault ("ns3::LteSpectrumPhy::CtrlFullDuplexEnabled", BooleanValue (true));
+  Config::SetDefault ("ns3::LteSpectrumPhy::DropRbOnCollisionEnabled", BooleanValue (false));
+  Config::SetDefault ("ns3::LteUePhy::DownlinkCqiPeriodicity", TimeValue (MilliSeconds (79)));
 
   //Reduce frequency of CQI report to allow for transmissions
   Config::SetDefault ("ns3::LteUePhy::DownlinkCqiPeriodicity", TimeValue (MilliSeconds (79)));
@@ -491,13 +503,48 @@ int main (int argc, char *argv[])
   enbSidelinkConfiguration->SetSlEnabled (true);
 
   //-Configure communication pool
+  //resource setup : UE selected
   enbSidelinkConfiguration->SetDefaultPool (proseHelper->GetDefaultSlCommTxResourcesSetupUeSelected ());
-
+  
   //-Enable discovery
   enbSidelinkConfiguration->SetDiscEnabled (true);
 
   //-Configure discovery pool
   enbSidelinkConfiguration->AddDiscPool (proseHelper->GetDefaultSlDiscTxResourcesSetupUeSelected ());
+  LteRrcSap::SlDiscTxResourcesSetup pool;
+  LteSlDiscResourcePoolFactory pDiscFactory;
+  pDiscFactory.SetDiscCpLen ("NORMAL");
+  pDiscFactory.SetDiscPeriod ("rf32");
+  pDiscFactory.SetNumRetx (0);
+  pDiscFactory.SetNumRepetition (1);
+  pDiscFactory.SetDiscPrbNum (10);
+  pDiscFactory.SetDiscPrbStart (10);
+  pDiscFactory.SetDiscPrbEnd (40);
+  pDiscFactory.SetDiscOffset (0);
+  pDiscFactory.SetDiscBitmap (0x11111);
+  pDiscFactory.SetDiscTxProbability ("p100");
+
+  pool.ueSelected.poolToAddModList.pools[0].pool =  pDiscFactory.CreatePool ();
+
+
+   LteRrcSap::SlCommTxResourcesSetup commpool;
+  LteSlResourcePoolFactory pfactory;
+  //Control
+  pfactory.SetControlPeriod ("sf40");
+  pfactory.SetControlBitmap (0x00000000FF); //8 subframes for PSCCH
+  pfactory.SetControlOffset (0);
+  pfactory.SetControlPrbNum (22);
+  pfactory.SetControlPrbStart (0);
+  pfactory.SetControlPrbEnd (49);
+  
+  //Data
+  pfactory.SetDataBitmap (0xFFFFFFFFFF);
+  pfactory.SetDataOffset (8); //After 8 subframes of PSCCH
+  pfactory.SetDataPrbNum (25);
+  pfactory.SetDataPrbStart (0);
+  pfactory.SetDataPrbEnd (49);
+
+  commpool.ueSelected.poolToAddModList.pools[0].pool =  pfactory.CreatePool ();
 
   //-Configure UE-to-Network Relay parameters
   //The parameters for UE-to-Network Relay (re)selection are broadcasted in the SIB19 to the UEs attached to the eNB.
@@ -525,6 +572,7 @@ int main (int argc, char *argv[])
       preconfigurationRemote.preconfigGeneral.carrierFreq = enbDevs.Get (0)->GetObject<LteEnbNetDevice> ()->GetUlEarfcn ();
       preconfigurationRemote.preconfigGeneral.slBandwidth = enbDevs.Get (0)->GetObject<LteEnbNetDevice> ()->GetUlBandwidth ();
       std::cout << 1 << std::endl;
+
       //-Configure preconfigured communication pool
       preconfigurationRemote.preconfigComm = proseHelper->GetDefaultSlPreconfigCommPoolList ();
       
@@ -533,7 +581,46 @@ int main (int argc, char *argv[])
 //         std::cout << 1 << std::endl;
 //   // LteSlPreconfigPoolFactory preconfCommPoolFactory;
   
-     
+      //Discovery
+      preconfigurationRemote.preconfigDisc.nbPools = 1;
+      LteSlDiscPreconfigPoolFactory preconfDiscPoolFactory;
+      preconfDiscPoolFactory.SetDiscCpLen ("NORMAL");
+      preconfDiscPoolFactory.SetDiscPeriod ("rf32");
+      preconfDiscPoolFactory.SetNumRetx (0);
+      preconfDiscPoolFactory.SetNumRepetition (1);
+      preconfDiscPoolFactory.SetDiscPrbNum (10);
+      preconfDiscPoolFactory.SetDiscPrbStart (10);
+      preconfDiscPoolFactory.SetDiscPrbEnd (40);
+      preconfDiscPoolFactory.SetDiscOffset (0);
+      preconfDiscPoolFactory.SetDiscBitmap (0x11111);
+      preconfDiscPoolFactory.SetDiscTxProbability ("p100");
+
+      preconfigurationRemote.preconfigDisc.pools[0] = preconfDiscPoolFactory.CreatePool ();
+
+       //Communication
+      preconfigurationRemote.preconfigComm.nbPools = 1;
+      LteSlPreconfigPoolFactory preconfCommPoolFactory;
+      //-Control
+      preconfCommPoolFactory.SetControlPeriod ("sf40");
+      preconfCommPoolFactory.SetControlBitmap (0x00000000FF); //8 subframes for PSCCH
+      preconfCommPoolFactory.SetControlOffset (0);
+      preconfCommPoolFactory.SetControlPrbNum (22);
+      preconfCommPoolFactory.SetControlPrbStart (0);
+      preconfCommPoolFactory.SetControlPrbEnd (49);
+      //-Data
+      preconfCommPoolFactory.SetDataBitmap (0xFFFFFFFFFF);
+      preconfCommPoolFactory.SetDataOffset (8); //After 8 subframes of PSCCH
+      preconfCommPoolFactory.SetDataPrbNum (25);
+      preconfCommPoolFactory.SetDataPrbStart (0);
+      preconfCommPoolFactory.SetDataPrbEnd (49);
+
+      preconfigurationRemote.preconfigComm.pools[0] = preconfCommPoolFactory.CreatePool ();
+
+      //-Relay UE (re)selection
+      preconfigurationRemote.preconfigRelay.haveReselectionInfoOoc = true;
+      preconfigurationRemote.preconfigRelay.reselectionInfoOoc.filterCoefficient = 0;
+      preconfigurationRemote.preconfigRelay.reselectionInfoOoc.minHyst = 0;
+      preconfigurationRemote.preconfigRelay.reselectionInfoOoc.qRxLevMin = -125;
 
 
 // preconfigurationRemote.preconfigComm.nbPools = 1;
@@ -561,12 +648,17 @@ int main (int argc, char *argv[])
 
 
       //-Configure preconfigured discovery pool
-      preconfigurationRemote.preconfigDisc = proseHelper->GetDefaultSlPreconfigDiscPoolList ();
+    //   preconfigurationRemote.preconfigDisc = proseHelper->GetDefaultSlPreconfigDiscPoolList ();
        std::cout << 5 << std::endl;
       //-Configure preconfigured UE-to-Network Relay parameters
-      preconfigurationRemote.preconfigRelay = proseHelper->GetDefaultSlPreconfigRelay ();
+    //   preconfigurationRemote.preconfigRelay = proseHelper->GetDefaultSlPreconfigRelay ();
        std::cout << 6 << std::endl;
+
     }
+
+
+  uint8_t nb = 3;
+  ueSidelinkConfiguration->SetDiscTxResources (nb);
 
   //-Enable discovery
   ueSidelinkConfiguration->SetDiscEnabled (true);
@@ -579,6 +671,25 @@ int main (int argc, char *argv[])
 
   ueSidelinkConfiguration->SetSlPreconfiguration (preconfigurationRemote);
   lteHelper->InstallSidelinkConfiguration (remoteUeDevs, ueSidelinkConfiguration);
+  
+  //NAS layer 
+  WifiHelper wifi;
+wifi.SetStandard (WIFI_PHY_STANDARD_80211g); //2.4Ghz
+wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager",
+                                "DataMode", StringValue ("ErpOfdmRate54Mbps"));
+ 
+WifiMacHelper wifiMac;
+YansWifiPhyHelper wifiPhy = YansWifiPhyHelper::Default ();
+YansWifiChannelHelper wifiChannel;
+wifiChannel.SetPropagationDelay ("ns3::ConstantSpeedPropagationDelayModel");
+wifiChannel.AddPropagationLoss ("ns3::FriisPropagationLossModel",
+                                "Frequency", DoubleValue (2.407e9)); //2.4Ghz
+wifiMac.SetType ("ns3::AdhocWifiMac");
+YansWifiPhyHelper phy = wifiPhy;
+phy.SetChannel (wifiChannel.Create ());
+WifiMacHelper mac = wifiMac;
+allUeDevs = wifi.Install (phy, mac, allUeNodes);
+
 
   //Install the IP stack on the UEs and assign network IP addresses
   internet.Install (relayUeNodes);
@@ -664,10 +775,10 @@ int main (int argc, char *argv[])
       //UdpEchoServer listening in the Remote UE port
       UdpEchoServerHelper echoServerHelper (remUePort);
       ApplicationContainer singleServerApp;
-      if (echoServerNode.compare ("RemoteHost") == 0)
+      if (echoServerNode.compare ("RelayUE") == 0)
         {
-          singleServerApp.Add (echoServerHelper.Install (remoteHost));
-          echoServerNodeId = remoteHost->GetId ();
+          singleServerApp.Add (echoServerHelper.Install (relayUeNodes));
+          echoServerNodeId = relayUeNodes.Get(0)->GetId ();
         }
       else if (echoServerNode.compare ("RemoteUE") == 0)
         {
@@ -701,9 +812,98 @@ int main (int argc, char *argv[])
       singleClientApp.Start (Seconds (3.0 + startTimeRemote [remUeIdx]) );
       //Stop the application after 10.0 s
       singleClientApp.Stop (Seconds (3.0 + startTimeRemote [remUeIdx] + 10.0));
+ 
+
+    /* mcptt app**************************************/ 
+    //creating mcptt application for each device 
+
+McpttHelper mcpttHelper;
+ApplicationContainer mcpttclientApps;
+McpttTimer mcpttTimer;
+
+Time startTime = Seconds (1);
+Time stopTime = Seconds (20); 
+double pushTimeMean = 5.0; // seconds
+double pushTimeVariance = 2.0; // seconds
+double releaseTimeMean = 5.0; // seconds
+double releaseTimeVariance = 2.0; // seconds
+TypeId socketFacTid = UdpSocketFactory::GetTypeId ();
+DataRate dataRate = DataRate ("24kb/s");
+Ipv6Address PeerAddress = Ipv6Address ("6001:db80::");
+Ipv4Address groupAddress4 = Ipv4Address ("255.255.255.255");
+uint32_t msgSize = 60; //60 + RTP header = 60 + 12 = 72
+//creating mcptt service on each node
+
+mcpttHelper.SetPttApp ("ns3::McpttPttApp",
+                        "PeerAddress", Ipv4AddressValue (groupAddress4), 
+                        "PushOnStart", BooleanValue (true));
+mcpttHelper.SetMediaSrc ("ns3::McpttMediaSrc",
+                        "Bytes", UintegerValue (msgSize),
+                        "DataRate", DataRateValue (dataRate));
+mcpttHelper.SetPusher ("ns3::McpttPusher",
+                        "Automatic", BooleanValue (false));
+mcpttHelper.SetPusherPushVariable ("ns3::NormalRandomVariable",
+                        "Mean", DoubleValue (pushTimeMean),
+                        "Variance", DoubleValue (pushTimeVariance));
+mcpttHelper.SetPusherReleaseVariable ("ns3::NormalRandomVariable",
+                        "Mean", DoubleValue (releaseTimeMean),
+                        "Variance", DoubleValue (releaseTimeVariance));
+
+mcpttHelper.EnableStateMachineTraces();       
+
+mcpttclientApps.Add (mcpttHelper.Install (allUeNodes));
+mcpttclientApps.Start (startTime);
+mcpttclientApps.Stop (stopTime);
+
+//creating a call initiated by the press of push button 
+ObjectFactory callFac;
+callFac.SetTypeId ("ns3::McpttCallMachineGrpBroadcast");
+
+ObjectFactory floorFac;
+floorFac.SetTypeId ("ns3::McpttFloorMachineBasic");
+  
+
+
+//creating location to store application info of UEs A, B 
+Ptr<McpttPttApp> ueAPttApp = DynamicCast<McpttPttApp, Application> (mcpttclientApps.Get (0));
+
+//floor and call machines generate*******************************
+ueAPttApp->CreateCall (callFac, floorFac);
+ueAPttApp->SelectLastCall ();
+
+Ipv4AddressValue grpAddr;
+
+Simulator::Schedule (Seconds (2.2), &McpttPttApp::TakePushNotification, ueAPttApp);
+uint16_t floorPort = McpttPttApp::AllocateNextPortNumber ();
+uint16_t speechPort = McpttPttApp::AllocateNextPortNumber ();
+Ptr<McpttCall> ueACall = ueAPttApp->GetSelectedCall ();
+Simulator::Schedule (Seconds (2.15), &McpttCall::OpenFloorChan, ueACall, grpAddr.Get (), floorPort);
+Simulator::Schedule (Seconds (2.15), &McpttCall::OpenFloorChan, ueACall, grpAddr.Get (), speechPort);
+
+/** tracing ***************/
+    uint32_t mcpttClientAppNodeId = 0;
+     
+     mcpttClientAppNodeId = remoteUeNodes.Get(0)->GetId ();
+            //Tracing packets on the UdpEchoServer (S)
+      oss << "rx\tS\t" << mcpttClientAppNodeId;
+      mcpttclientApps.Get (0)->TraceConnect ("RxWithAddresses", oss.str (), MakeBoundCallback (&UePacketTrace, packetOutputStream));
+      oss.str ("");
+      oss << "tx\tS\t" << mcpttClientAppNodeId;
+      mcpttclientApps.Get (0)->TraceConnect ("TxWithAddresses", oss.str (), MakeBoundCallback (&UePacketTrace, packetOutputStream));
+      oss.str ("");
+
+
+
+  NS_LOG_INFO ("Enabling MCPTT traces...");
+  mcpttHelper.EnableMsgTraces ();
+  mcpttHelper.EnableStateMachineTraces ();
+
 
       //Tracing packets on the UdpEchoClient (C)
       oss << "tx\tC\t" << remoteUeNodes.Get (remUeIdx)->GetId ();
+
+      std::cout << "remote ue id: " << remoteUeNodes.Get (remUeIdx)->GetId () << std::endl;
+
       singleClientApp.Get (0)->TraceConnect ("TxWithAddresses", oss.str (), MakeBoundCallback (&UePacketTrace, packetOutputStream));
       oss.str ("");
       oss << "rx\tC\t" << remoteUeNodes.Get (remUeIdx)->GetId ();
@@ -736,6 +936,15 @@ int main (int argc, char *argv[])
   tft->Add (dlpf);
   EpsBearer bearer (EpsBearer::NGBR_VIDEO_TCP_DEFAULT);
   lteHelper->ActivateDedicatedEpsBearer (relayUeDevs, bearer, tft);
+
+  Ptr<EpcTft> remote_tft = Create<EpcTft> ();
+      EpcTft::PacketFilter rem_dlpf;
+      rem_dlpf.localIpv6Address.Set ("7777:f00e::");
+      rem_dlpf.localIpv6Prefix = Ipv6Prefix (64);
+      remote_tft->Add (rem_dlpf);
+      EpsBearer remote_bearer (EpsBearer::NGBR_VIDEO_TCP_DEFAULT);
+      lteHelper->ActivateDedicatedEpsBearer (remoteUeDevs.Get (0), remote_bearer, remote_tft);
+
 
   //Schedule the start of the relay service in each UE with their corresponding
   //roles and service codes
@@ -778,6 +987,16 @@ int main (int argc, char *argv[])
                                            MakeBoundCallback (&TraceSinkPC5SignalingPacketTrace,
                                                               PC5SignalingPacketTraceStream));
     }
+  
+
+
+   std::ostringstream txWithAddresses;
+  txWithAddresses << "/NodeList/" << remoteUeDevs.Get (0)->GetNode ()->GetId () << "/ApplicationList/0/TxWithAddresses";
+  //Config::ConnectWithoutContext (txWithAddresses.str (), MakeCallback (&SlOoc1Relay1RemoteRegularTestCase::DataPacketSinkTxNode, this));
+
+  std::ostringstream rxWithAddresses;
+  rxWithAddresses << "/NodeList/" << remoteUeDevs.Get (0)->GetNode ()->GetId () << "/ApplicationList/0/RxWithAddresses";
+
 
   lteHelper->EnablePdcpTraces ();
   lteHelper->EnableSlPscchMacTraces ();
@@ -788,13 +1007,16 @@ int main (int argc, char *argv[])
 
   NS_LOG_INFO ("Simulation time " << simTime << " s");
   NS_LOG_INFO ("Starting simulation...");
+
   AnimationInterface anim("b_lte_sl_relay_cluster.xml");
-   std::cout << 7 << std::endl;
+  std::cout << 7 << std::endl;
   anim.SetMaxPktsPerTraceFile(500000); 
+  anim.EnablePacketMetadata (true);
+
   Simulator::Stop (Seconds (simTime));
-   std::cout << 8 << std::endl;
+  std::cout << 8 << std::endl;
   Simulator::Run ();
- std::cout << 9 << std::endl;
+  std::cout << 9 << std::endl;
   Simulator::Destroy ();
   return 0;
 
