@@ -103,11 +103,29 @@ int main (int argc, char *argv[])
       LogComponentEnable ("LteHelper", logLevel);
     }
 
+
   // Set the UEs power in dBm
   Config::SetDefault ("ns3::LteUePhy::TxPower", DoubleValue (23.0));
   // Use error model and HARQ for D2D Discovery (recovery process)
   Config::SetDefault ("ns3::LteSpectrumPhy::SlDiscoveryErrorModelEnabled", BooleanValue (useRecovery));
   Config::SetDefault ("ns3::LteSpectrumPhy::DropRbOnCollisionEnabled", BooleanValue (true));
+
+  //sidelink pre-configuration
+  //Configure the UE for UE_SELECTED scenario
+  Config::SetDefault ("ns3::LteUeMac::SlGrantMcs", UintegerValue (16));
+  Config::SetDefault ("ns3::LteUeMac::SlGrantSize", UintegerValue (5)); //The number of RBs allocated per UE for Sidelink
+  Config::SetDefault ("ns3::LteUeMac::Ktrp", UintegerValue (1));
+  Config::SetDefault ("ns3::LteUeMac::UseSetTrp", BooleanValue (true)); //use default Trp index of 0
+
+  //for tracing
+  Config::SetDefault ("ns3::McpttMsgStats::CallControl", BooleanValue (true));
+  Config::SetDefault ("ns3::McpttMsgStats::FloorControl", BooleanValue (true));
+  Config::SetDefault ("ns3::McpttMsgStats::Media", BooleanValue (true));
+  Config::SetDefault ("ns3::McpttMsgStats::IncludeMessageContent", BooleanValue (true));
+
+  // Set error models
+  Config::SetDefault ("ns3::LteSpectrumPhy::SlCtrlErrorModelEnabled", BooleanValue (true));
+  Config::SetDefault ("ns3::LteSpectrumPhy::SlDataErrorModelEnabled", BooleanValue (true));
 
   ConfigStore inputConfig;
   inputConfig.ConfigureDefaults ();
@@ -263,72 +281,89 @@ preconfiguration.preconfigComm.pools[0] = pfactory.CreatePool ();
 pfactory.SetHaveUeSelectedResourceConfig (true);
 
   
-  ueSidelinkConfiguration->SetSlPreconfiguration (preconfiguration);
-  lteHelper->InstallSidelinkConfiguration (ueDevs, ueSidelinkConfiguration);
+ueSidelinkConfiguration->SetSlPreconfiguration (preconfiguration);
+lteHelper->InstallSidelinkConfiguration (ueDevs, ueSidelinkConfiguration);
 
-    uint16_t base_t = 2000; //ms
+uint16_t base_t = 2000; //ms
 
-    uint16_t devIt = 1;
-    ueDevs.Get (devIt)->GetObject<LteUeNetDevice> ()->GetRrc ()->SetSlssid (devIt + 10);
-    ueDevs.Get (devIt)->GetObject<LteUeNetDevice> ()->GetPhy ()->SetFirstScanningTime (MilliSeconds (base_t + (devIt * base_t)));
+uint16_t devIt = 1;
+ueDevs.Get (devIt)->GetObject<LteUeNetDevice> ()->GetRrc ()->SetSlssid (devIt + 10);
+ueDevs.Get (devIt)->GetObject<LteUeNetDevice> ()->GetPhy ()->SetFirstScanningTime (MilliSeconds (base_t + (devIt * base_t)));
 
-  NS_LOG_INFO ("Configuring discovery applications");
-  std::map<Ptr<NetDevice>, std::list<uint32_t> > announcePayloads; 
-  std::map<Ptr<NetDevice>, std::list<uint32_t> > monitorPayloads; 
+NS_LOG_INFO ("Configuring discovery applications");
+std::map<Ptr<NetDevice>, std::list<uint32_t> > announcePayloads; 
+std::map<Ptr<NetDevice>, std::list<uint32_t> > monitorPayloads; 
 
-  for (uint32_t i = 1; i <= nbUes; ++i)
-    {
-      announcePayloads[ueDevs.Get (i - 1)].push_back (i);
+for (uint32_t i = 1; i <= nbUes; ++i)
+  {
+    announcePayloads[ueDevs.Get (i - 1)].push_back (i);
 
-      for (uint32_t j = 1; j <= nbUes; ++j)
-        {
-          if (i != j)
-            {
-              monitorPayloads[ueDevs.Get (i - 1)].push_back (j);
-            }
-        }
-    }
+    for (uint32_t j = 1; j <= nbUes; ++j)
+      {
+        if (i != j)
+          {
+            monitorPayloads[ueDevs.Get (i - 1)].push_back (j);
+          }
+      }
+  }
 
-  for (uint32_t i = 0; i < nbUes; i++)
-    {
-      Simulator::Schedule (Seconds (2.0), &LteSidelinkHelper::StartDiscoveryApps, sidelinkHelper, ueDevs.Get (i), announcePayloads[ueDevs.Get (i)], LteSlUeRrc::Announcing);
-      Simulator::Schedule (Seconds (2.0), &LteSidelinkHelper::StartDiscoveryApps, sidelinkHelper, ueDevs.Get (i), monitorPayloads[ueDevs.Get (i)], LteSlUeRrc::Monitoring);
-    }
- AsciiTraceHelper ascii;
-    Ptr<OutputStreamWrapper> streamSyncRef = ascii.CreateFileStream ("SyncRef.txt");
-    *streamSyncRef->GetStream () << "Time\tIMSI\tprevSLSSID\tprevRxOffset\tprevFrameNo\tprevSframeNo\tcurrSLSSID\tcurrRxOffset\tcurrFrameNo\tcurrSframeNo" << std::endl;
+for (uint32_t i = 0; i < nbUes; i++)
+  {
+    Simulator::Schedule (Seconds (2.0), &LteSidelinkHelper::StartDiscoveryApps, sidelinkHelper, ueDevs.Get (i), announcePayloads[ueDevs.Get (i)], LteSlUeRrc::Announcing);
+    Simulator::Schedule (Seconds (2.0), &LteSidelinkHelper::StartDiscoveryApps, sidelinkHelper, ueDevs.Get (i), monitorPayloads[ueDevs.Get (i)], LteSlUeRrc::Monitoring);
+  }
 
-    Ptr<OutputStreamWrapper> streamSendOfSlss = ascii.CreateFileStream ("TxSlss.txt");
-    *streamSendOfSlss->GetStream () << "Time\tIMSI\tSLSSID\ttxOffset\tinCoverage\tFrameNo\tSframeNo" << std::endl;
+AsciiTraceHelper ascii;
+Ptr<OutputStreamWrapper> streamSyncRef = ascii.CreateFileStream ("SyncRef.txt");
+*streamSyncRef->GetStream () << "Time\tIMSI\tprevSLSSID\tprevRxOffset\tprevFrameNo\tprevSframeNo\tcurrSLSSID\tcurrRxOffset\tcurrFrameNo\tcurrSframeNo" << std::endl;
 
-   for (uint32_t i = 0; i < ueDevs.GetN (); ++i)
-    {
-        Ptr<LteUeRrc> ueRrc =  ueDevs.Get (i)->GetObject<LteUeNetDevice> ()->GetRrc ();
-        ueRrc->TraceConnectWithoutContext ("ChangeOfSyncRef", MakeBoundCallback (&NotifyChangeOfSyncRef, streamSyncRef));
-        ueRrc->TraceConnectWithoutContext ("SendSLSS", MakeBoundCallback (&NotifySendOfSlss, streamSendOfSlss));
-    }
+Ptr<OutputStreamWrapper> streamSendOfSlss = ascii.CreateFileStream ("TxSlss.txt");
+*streamSendOfSlss->GetStream () << "Time\tIMSI\tSLSSID\ttxOffset\tinCoverage\tFrameNo\tSframeNo" << std::endl;
+
+for (uint32_t i = 0; i < ueDevs.GetN (); ++i)
+{
+    Ptr<LteUeRrc> ueRrc =  ueDevs.Get (i)->GetObject<LteUeNetDevice> ()->GetRrc ();
+    ueRrc->TraceConnectWithoutContext ("ChangeOfSyncRef", MakeBoundCallback (&NotifyChangeOfSyncRef, streamSyncRef));
+    ueRrc->TraceConnectWithoutContext ("SendSLSS", MakeBoundCallback (&NotifySendOfSlss, streamSendOfSlss));
+}
+
+  /*Synchronization*/
+//Set initial SLSSID and start of the first scanning for all UEs
+uint32_t baseTime = 2000; //ms
+uint32_t firstScanningTime = 0;
+
+for (uint32_t i = 0; i < ueDevs.GetN (); i++)
+{
+  uint64_t tempSlssid = i + 10;
+  ueDevs.Get (i)->GetObject<LteUeNetDevice> ()->GetRrc ()->SetSlssid (tempSlssid);
+  firstScanningTime = baseTime + (i * baseTime);
+  ueDevs.Get (i)->GetObject<LteUeNetDevice> ()->GetPhy ()->SetFirstScanningTime (MilliSeconds (firstScanningTime));
+  uint64_t imsi = ueDevs.Get (i)->GetObject<LteUeNetDevice> ()->GetRrc ()->GetImsi ();
+  NS_LOG_INFO ("IMSI " << imsi << " SLSSID " << tempSlssid
+                        << " First Scan "  << firstScanningTime << " ms");
+}
     
 /*NAS layer*******/
 //installing wifi interface in nodes
-// WifiHelper wifi;
-// wifi.SetStandard (WIFI_PHY_STANDARD_80211g); //2.4Ghz
-// wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager",
-//                                 "DataMode", StringValue ("ErpOfdmRate54Mbps"));
+WifiHelper wifi;
+wifi.SetStandard (WIFI_PHY_STANDARD_80211g); //2.4Ghz
+wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager",
+                                "DataMode", StringValue ("ErpOfdmRate54Mbps"));
 
-// WifiMacHelper wifiMac;
-// YansWifiPhyHelper wifiPhy = YansWifiPhyHelper::Default ();
-// YansWifiChannelHelper wifiChannel;
-// wifiChannel.SetPropagationDelay ("ns3::ConstantSpeedPropagationDelayModel");
-// wifiChannel.AddPropagationLoss ("ns3::FriisPropagationLossModel",
-//                                 "Frequency", DoubleValue (2.407e9)); //2.4Ghz
+WifiMacHelper wifiMac;
+YansWifiPhyHelper wifiPhy = YansWifiPhyHelper::Default ();
+YansWifiChannelHelper wifiChannel;
+wifiChannel.SetPropagationDelay ("ns3::ConstantSpeedPropagationDelayModel");
+wifiChannel.AddPropagationLoss ("ns3::FriisPropagationLossModel",
+                                "Frequency", DoubleValue (2.407e9)); //2.4Ghz
 
-// wifiMac.SetType ("ns3::AdhocWifiMac");
+wifiMac.SetType ("ns3::AdhocWifiMac");
 
-// YansWifiPhyHelper phy = wifiPhy;
-// phy.SetChannel (wifiChannel.Create ());
+YansWifiPhyHelper phy = wifiPhy;
+phy.SetChannel (wifiChannel.Create ());
 
-// WifiMacHelper mac = wifiMac;
-// ueDevs = wifi.Install (phy, mac, ueNodes);
+WifiMacHelper mac = wifiMac;
+ueDevs = wifi.Install (phy, mac, ueNodes);
 
 //installing internet access to all nodes
 NS_LOG_INFO ("Installing internet stack on all nodes...");
@@ -339,17 +374,17 @@ internet.Install (ueNodes);
 NS_LOG_INFO ("Assigning IP addresses to each net device...");
 Ipv4AddressHelper ipv4;
 ipv4.SetBase ("10.1.1.0", "255.255.255.0");
-Ipv4InterfaceContainer i = ipv4.Assign (ueDevs);
+Ipv4InterfaceContainer i = epcHelper->AssignUeIpv4Address (ueDevs);
 
 Ipv4StaticRoutingHelper ipv4RoutingHelper;
 
-  for (uint32_t u = 0; u < ueDevs.GetN (); ++u)
-    {
-      Ptr<Node> ueNode = ueNodes.Get (u);
-      // Set the default gateway for the UE
-      Ptr<Ipv4StaticRouting> ueStaticRouting = ipv4RoutingHelper.GetStaticRouting (ueNode->GetObject<Ipv4> ());
-      ueStaticRouting->SetDefaultRoute (epcHelper->GetUeDefaultGatewayAddress (), 1);
-    }
+for (uint32_t u = 0; u < ueDevs.GetN (); ++u)
+  {
+    Ptr<Node> ueNode = ueNodes.Get (u);
+    // Set the default gateway for the UE
+    Ptr<Ipv4StaticRouting> ueStaticRouting = ipv4RoutingHelper.GetStaticRouting (ueNode->GetObject<Ipv4> ());
+    ueStaticRouting->SetDefaultRoute (epcHelper->GetUeDefaultGatewayAddress (), 1);
+  }
 
 Ipv4Address remoteUeaddress =  i.GetAddress(0);
 Ipv4Address relayUeaddress  =  i.GetAddress(1);
@@ -358,12 +393,12 @@ Address remoteAddress;
 Address localAddress;
 remoteAddress = InetSocketAddress (remoteUeaddress, 8000);
 localAddress  = InetSocketAddress (relayUeaddress, 8000);
-uint32_t groupL2Address = 255;
-Time slBearersActivationTime = Seconds (1.0);
-Ptr<LteSlTft> tft = Create<LteSlTft> (LteSlTft::TRANSMIT, relayUeaddress, groupL2Address);
-sidelinkHelper->ActivateSidelinkBearer (Seconds (1.0), ueDevs.Get(0), tft);
-tft = Create<LteSlTft> (LteSlTft::RECEIVE, relayUeaddress, groupL2Address);
-sidelinkHelper->ActivateSidelinkBearer (slBearersActivationTime, ueDevs.Get(1), tft);
+// uint32_t groupL2Address = 255;
+// Time slBearersActivationTime = Seconds (1.0);
+// Ptr<LteSlTft> tft = Create<LteSlTft> (LteSlTft::TRANSMIT, relayUeaddress, groupL2Address);
+// sidelinkHelper->ActivateSidelinkBearer (Seconds (1.0), ueDevs.Get(0), tft);
+// tft = Create<LteSlTft> (LteSlTft::RECEIVE, relayUeaddress, groupL2Address);
+// sidelinkHelper->ActivateSidelinkBearer (slBearersActivationTime, ueDevs.Get(1), tft);
 ns3::PacketMetadata::Enable ();
 
 /*Application layer*************************************************************************************/
@@ -675,6 +710,25 @@ Simulator::Schedule (Seconds (5.25), &McpttTimer::Stop, Atfb2);
 Simulator::Schedule (Seconds (5.25), &McpttTimer::Stop, Btfb1);
 Simulator::Schedule (Seconds (5.25), &McpttTimer::Stop, Ctfb1);
 
+
+/*udp application*/
+  //Set Application in the UEs
+  Ipv4Address groupAddress ("225.0.0.0"); //use multicast address as destination
+  UdpClientHelper udpClient (groupAddress, 8000);
+  udpClient.SetAttribute ("MaxPackets", UintegerValue (500));
+  udpClient.SetAttribute ("Interval", TimeValue (Seconds (0.1)));
+  udpClient.SetAttribute ("PacketSize", UintegerValue (280));
+
+  clientApps = udpClient.Install (ueNodes.Get (0));
+  clientApps.Get (0)->SetStartTime (Seconds (3.0));
+  clientApps.Stop (Seconds (5.0));
+
+  ApplicationContainer serverApps;
+  PacketSinkHelper sidelinkSink ("ns3::UdpSocketFactory",Address (InetSocketAddress (Ipv4Address::GetAny (), 8000)));
+  serverApps = sidelinkSink.Install (ueNodes.Get (1));
+  serverApps.Get (0)->SetStartTime (Seconds (3.0));
+
+
 /*****************************************************************/
 
 // assigning ip addresses to all devices of nodes
@@ -717,8 +771,8 @@ ns3::PacketMetadata::Enable ();
   ///*** End of application configuration ***///
   //other traces
  
-
-  // Set Discovery Traces
+// Set Discovery Traces
+  //Enable traces
 lteHelper->EnablePhyTraces ();
 lteHelper->EnableMacTraces ();
 lteHelper->EnableRlcTraces ();
