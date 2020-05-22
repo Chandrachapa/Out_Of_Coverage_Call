@@ -261,8 +261,6 @@ int main (int argc, char *argv[])
   cmd.AddValue ("echoServerNode", "The node towards which the Remote UE traffic is directed to (RemoteHost|RemoteUE)", echoServerNode);
   cmd.Parse (argc, argv);
 
-
- 
  
   if (echoServerNode.compare ("RemoteHost") != 0 && echoServerNode.compare ("RemoteUE") != 0)
     {
@@ -324,12 +322,6 @@ int main (int argc, char *argv[])
   Config::SetDefault ("ns3::LteUeMac::UseSetTrp", BooleanValue (false));
   Config::SetDefault ("ns3::LteUeMac::SlScheduler", StringValue ("Random")); //Values include Fixed, Random, MinPrb, MaxCoverage
 
-  //for tracing
-  Config::SetDefault ("ns3::McpttMsgStats::CallControl", BooleanValue (true));
-  Config::SetDefault ("ns3::McpttMsgStats::FloorControl", BooleanValue (true));
-  Config::SetDefault ("ns3::McpttMsgStats::Media", BooleanValue (true));
-  Config::SetDefault ("ns3::McpttMsgStats::IncludeMessageContent", BooleanValue (true));
-  
   //connection with the gNB
   //Set the frequency
   Config::SetDefault ("ns3::LteEnbNetDevice::DlEarfcn", UintegerValue (5330));
@@ -360,12 +352,11 @@ int main (int argc, char *argv[])
   Ptr<LteHelper> lteHelper = CreateObject<LteHelper> ();
 
   //Create and set the EPC helper
-  Ptr<NoBackhaulEpcHelper> epcHelper = CreateObject<NoBackhaulEpcHelper> ();
-  // Ptr<PointToPointEpcHelper>  epcHelper = CreateObject<PointToPointEpcHelper> ();
+  Ptr<PointToPointEpcHelper>  epcHelper = CreateObject<PointToPointEpcHelper> ();
   lteHelper->SetEpcHelper (epcHelper);
   
   //core network
-  // Ptr<Node> pgw = epcHelper->GetPgwNode ();
+  Ptr<Node> pgw = epcHelper->GetPgwNode ();
 
   //setup sidelink 
 
@@ -382,26 +373,6 @@ int main (int argc, char *argv[])
   //Set pathloss model
   lteHelper->SetAttribute ("PathlossModel", StringValue ("ns3::Hybrid3gppPropagationLossModel"));
 
-  // channel model initialization
-lteHelper->Initialize ();
-// // //Set the frequency
-uint32_t ulEarfcn = 18300;
-// uint16_t ulBandwidth = 50;
-
-// Since we are not installing eNB, we need to set the frequency attribute of pathloss model here
-double ulFreq = LteSpectrumValueHelper::GetCarrierFrequency (ulEarfcn);
-NS_LOG_LOGIC ("UL freq: " << ulFreq);
-Ptr<Object> uplinkPathlossModel = lteHelper->GetUplinkPathlossModel ();
-Ptr<PropagationLossModel> lossModel = uplinkPathlossModel->GetObject<PropagationLossModel> ();
-NS_ABORT_MSG_IF (lossModel == NULL, "No PathLossModel");
-bool ulFreqOk = uplinkPathlossModel->SetAttributeFailSafe ("Frequency", DoubleValue (ulFreq));
-  if (!ulFreqOk)
-    {
-      NS_LOG_WARN ("UL propagation model does not have a Frequency attribute");
-    }
-
-  
-
   //Enable Sidelink
   lteHelper->SetAttribute ("UseSidelink", BooleanValue (true));
 
@@ -410,27 +381,27 @@ bool ulFreqOk = uplinkPathlossModel->SetAttributeFailSafe ("Frequency", DoubleVa
   //create nodes and specify location and mobility
   
   //Create a single RemoteHost
-  // NodeContainer remoteHostContainer;
-  // remoteHostContainer.Create (1);
+  NodeContainer remoteHostContainer;
+  remoteHostContainer.Create (1);
   
-  // std::cout << "remote host id :" <<remoteHostContainer.Get(0)->GetId() << std::endl;
+  std::cout << "remote host id :" <<remoteHostContainer.Get(0)->GetId() << std::endl;
 
-  // Ptr<Node> remoteHost = remoteHostContainer.Get (0);
- 
-  // internet.Install (remoteHostContainer);
+  Ptr<Node> remoteHost = remoteHostContainer.Get (0);
+  InternetStackHelper internet;
+  internet.Install (remoteHostContainer);
 
-  // // Create the Internet
-  // PointToPointHelper p2ph;
-  // p2ph.SetDeviceAttribute ("DataRate", DataRateValue (DataRate ("100Gb/s")));
-  // p2ph.SetDeviceAttribute ("Mtu", UintegerValue (1500));
-  // p2ph.SetChannelAttribute ("Delay", TimeValue (Seconds (0.010)));
-  
+  // Create the Internet
+  PointToPointHelper p2ph;
+  p2ph.SetDeviceAttribute ("DataRate", DataRateValue (DataRate ("100Gb/s")));
+  p2ph.SetDeviceAttribute ("Mtu", UintegerValue (1500));
+  p2ph.SetChannelAttribute ("Delay", TimeValue (Seconds (0.010)));
+  NetDeviceContainer internetDevices = p2ph.Install (pgw, remoteHost);
 
   //Create nodes (eNb + UEs)
   NodeContainer enbNode;
   enbNode.Create (1);
   NS_LOG_INFO ("eNb node id = [" << enbNode.Get (0)->GetId () << "]");
-  std::cout << "gnb id :" << enbNode.Get(0)->GetId() << std::endl;
+
 
   NodeContainer relayUeNodes;
   relayUeNodes.Create (nRelayUes);
@@ -443,12 +414,6 @@ bool ulFreqOk = uplinkPathlossModel->SetAttributeFailSafe ("Frequency", DoubleVa
   remoteUeNodes.Create (nRelayUes * nRemoteUesPerRelay);
   std::cout << "remote 1 id :" << remoteUeNodes.Get(0)->GetId() << std::endl;
   std::cout << "remote 2 id :" << remoteUeNodes.Get(1)->GetId() << std::endl;
-
-  Ptr<Node> relayUe1 = relayUeNodes.Get(0);
-  Ptr<Node> relayUe2 = relayUeNodes.Get(1);
-  InternetStackHelper internet;
-  // NetDeviceContainer internetDevices = p2ph.Install (relayUe1,relayUe2);
-  
 
   for (uint32_t ry = 0; ry < relayUeNodes.GetN (); ry++)
     {
@@ -523,33 +488,24 @@ bool ulFreqOk = uplinkPathlossModel->SetAttributeFailSafe ("Frequency", DoubleVa
 
   //Generate gnuplot file with the script to generate the topology plot
   GenerateTopologyPlotFile (enbNode, relayUeNodes, remoteUeNodes, relayRadius, remoteRadius);
-   
-  std::cout << "ok, 1 " << std::endl; 
-
 
   //Install LTE devices to the nodes
   NetDeviceContainer enbDevs = lteHelper->InstallEnbDevice (enbNode);
   NetDeviceContainer relayUeDevs = lteHelper->InstallUeDevice (relayUeNodes);
-  NetDeviceContainer remoteUeDevs; 
-  // = lteHelper->InstallUeDevice (remoteUeNodes);
+  NetDeviceContainer remoteUeDevs = lteHelper->InstallUeDevice (remoteUeNodes);
   NetDeviceContainer allUeDevs = NetDeviceContainer (relayUeDevs, remoteUeDevs);
-  std::cout << "ok, 2 " << std::endl; 
 
   //connecting sidelink and gnB
   //Configure eNodeB for Sidelink
   Ptr<LteSlEnbRrc> enbSidelinkConfiguration = CreateObject<LteSlEnbRrc> ();
   enbSidelinkConfiguration->SetSlEnabled (true);
-  std::cout << "ok, 3 " << std::endl; 
 
   //-Configure communication pool
   //resource setup : UE selected
   enbSidelinkConfiguration->SetDefaultPool (proseHelper->GetDefaultSlCommTxResourcesSetupUeSelected ());
-  std::cout << "ok, 4 " << std::endl; 
-
-
+  
   //-Enable discovery
   enbSidelinkConfiguration->SetDiscEnabled (true);
-  std::cout << "ok, 5 " << std::endl; 
 
   //-Configure discovery pool
   enbSidelinkConfiguration->AddDiscPool (proseHelper->GetDefaultSlDiscTxResourcesSetupUeSelected ());
@@ -565,17 +521,12 @@ bool ulFreqOk = uplinkPathlossModel->SetAttributeFailSafe ("Frequency", DoubleVa
   pDiscFactory.SetDiscOffset (0);
   pDiscFactory.SetDiscBitmap (0x11111);
   pDiscFactory.SetDiscTxProbability ("p100");
-  
-  std::cout << "ok, 6 " << std::endl; 
 
   pool.ueSelected.poolToAddModList.pools[0].pool =  pDiscFactory.CreatePool ();
-  std::cout << "ok, 7 " << std::endl; 
 
-  LteRrcSap::SlCommTxResourcesSetup commpool;
 
+   LteRrcSap::SlCommTxResourcesSetup commpool;
   LteSlResourcePoolFactory pfactory;
-  std::cout << "ok, 8 " << std::endl;
-
   //Control
   pfactory.SetControlPeriod ("sf40");
   pfactory.SetControlBitmap (0x00000000FF); //8 subframes for PSCCH
@@ -584,36 +535,27 @@ bool ulFreqOk = uplinkPathlossModel->SetAttributeFailSafe ("Frequency", DoubleVa
   pfactory.SetControlPrbStart (0);
   pfactory.SetControlPrbEnd (49);
   
-  std::cout << "ok, 9 " << std::endl; 
-
   //Data
   pfactory.SetDataBitmap (0xFFFFFFFFFF);
   pfactory.SetDataOffset (8); //After 8 subframes of PSCCH
   pfactory.SetDataPrbNum (25);
   pfactory.SetDataPrbStart (0);
   pfactory.SetDataPrbEnd (49);
-  std::cout << "ok, 10 " << std::endl; 
 
   commpool.ueSelected.poolToAddModList.pools[0].pool =  pfactory.CreatePool ();
-  pfactory.SetHaveUeSelectedResourceConfig (true);
-  std::cout << "ok, 11 " << std::endl; 
 
   //-Configure UE-to-Network Relay parameters
   //The parameters for UE-to-Network Relay (re)selection are broadcasted in the SIB19 to the UEs attached to the eNB.
   //they are required by the
   // LteUeRrc for SD-RSRP measurement and Relay Selection
   enbSidelinkConfiguration->SetDiscConfigRelay (proseHelper->GetDefaultSib19DiscConfigRelay ());
-  std::cout << "ok, 12 " << std::endl; 
 
   //Install eNodeB configuration on the eNodeB devices
   lteHelper->InstallSidelinkConfiguration (enbDevs, enbSidelinkConfiguration);
-   std::cout << "ok, 13 " << std::endl; 
-
 
   //Preconfigure UEs for Sidelink
   Ptr<LteSlUeRrc> ueSidelinkConfiguration = CreateObject<LteSlUeRrc> ();
   ueSidelinkConfiguration->SetSlEnabled (true);
-  std::cout << "ok, 14 " << std::endl; 
 
   //-Configure preconfiguration
   // Relay UEs: Empty configuration
@@ -621,21 +563,17 @@ bool ulFreqOk = uplinkPathlossModel->SetAttributeFailSafe ("Frequency", DoubleVa
   // Remote UEs: Empty configuration if in-coverage
   //             Custom configuration (see below) if out-of-coverage
   LteRrcSap::SlPreconfiguration preconfigurationRemote;
-  std::cout << "ok, 15 " << std::endl; 
-
 
   if (remoteUesOoc)
-     { 
-      //  uint32_t carrierFreq_r = 18300;
-    // uint8_t slBandwidth_=50;
+    {
       //Configure general preconfiguration parameters
       preconfigurationRemote.preconfigGeneral.carrierFreq = enbDevs.Get (0)->GetObject<LteEnbNetDevice> ()->GetUlEarfcn ();
       preconfigurationRemote.preconfigGeneral.slBandwidth = enbDevs.Get (0)->GetObject<LteEnbNetDevice> ()->GetUlBandwidth ();
-      std::cout << "ok, 16 " << std::endl; 
+      std::cout << 1 << std::endl;
 
       //-Configure preconfigured communication pool
       preconfigurationRemote.preconfigComm = proseHelper->GetDefaultSlPreconfigCommPoolList ();
-      std::cout << "ok, 17 " << std::endl; 
+      
 //        LteRrcSap::SlPreconfigCommPoolList preconfigComm;
 //   // preconfigComm.nbPools = 1;
 //         std::cout << 1 << std::endl;
@@ -654,18 +592,12 @@ bool ulFreqOk = uplinkPathlossModel->SetAttributeFailSafe ("Frequency", DoubleVa
       preconfDiscPoolFactory.SetDiscOffset (0);
       preconfDiscPoolFactory.SetDiscBitmap (0x11111);
       preconfDiscPoolFactory.SetDiscTxProbability ("p100");
-      std::cout << "ok, 18 " << std::endl; 
 
       preconfigurationRemote.preconfigDisc.pools[0] = preconfDiscPoolFactory.CreatePool ();
-      
-      std::cout << "ok, 19 " << std::endl; 
-
 
        //Communication
       preconfigurationRemote.preconfigComm.nbPools = 1;
       LteSlPreconfigPoolFactory preconfCommPoolFactory;
-      std::cout << "ok, 20 " << std::endl; 
-
       //-Control
       preconfCommPoolFactory.SetControlPeriod ("sf40");
       preconfCommPoolFactory.SetControlBitmap (0x00000000FF); //8 subframes for PSCCH
@@ -673,9 +605,6 @@ bool ulFreqOk = uplinkPathlossModel->SetAttributeFailSafe ("Frequency", DoubleVa
       preconfCommPoolFactory.SetControlPrbNum (22);
       preconfCommPoolFactory.SetControlPrbStart (0);
       preconfCommPoolFactory.SetControlPrbEnd (49);
-      
-      std::cout << "ok, 21 " << std::endl; 
-
       //-Data
       preconfCommPoolFactory.SetDataBitmap (0xFFFFFFFFFF);
       preconfCommPoolFactory.SetDataOffset (8); //After 8 subframes of PSCCH
@@ -684,8 +613,6 @@ bool ulFreqOk = uplinkPathlossModel->SetAttributeFailSafe ("Frequency", DoubleVa
       preconfCommPoolFactory.SetDataPrbEnd (49);
 
       preconfigurationRemote.preconfigComm.pools[0] = preconfCommPoolFactory.CreatePool ();
-      
-      std::cout << "ok, 22 " << std::endl; 
 
       //-Relay UE (re)selection
       preconfigurationRemote.preconfigRelay.haveReselectionInfoOoc = true;
@@ -693,7 +620,6 @@ bool ulFreqOk = uplinkPathlossModel->SetAttributeFailSafe ("Frequency", DoubleVa
       preconfigurationRemote.preconfigRelay.reselectionInfoOoc.minHyst = 0;
       preconfigurationRemote.preconfigRelay.reselectionInfoOoc.qRxLevMin = -125;
 
-      std::cout << "ok, 23 " << std::endl; 
 
 // preconfigurationRemote.preconfigComm.nbPools = 1;
 //    std::cout << 1 << std::endl;
@@ -721,39 +647,35 @@ bool ulFreqOk = uplinkPathlossModel->SetAttributeFailSafe ("Frequency", DoubleVa
 
       //-Configure preconfigured discovery pool
     //   preconfigurationRemote.preconfigDisc = proseHelper->GetDefaultSlPreconfigDiscPoolList ();
-      //  std::cout << 5 << std::endl;
+       std::cout << 5 << std::endl;
       //-Configure preconfigured UE-to-Network Relay parameters
     //   preconfigurationRemote.preconfigRelay = proseHelper->GetDefaultSlPreconfigRelay ();
-      //  std::cout << 6 << std::endl;
+       std::cout << 6 << std::endl;
 
     }
 
 
   uint8_t nb = 3;
   ueSidelinkConfiguration->SetDiscTxResources (nb);
-  std::cout << "ok, 24 " << std::endl; 
+
   //-Enable discovery
   ueSidelinkConfiguration->SetDiscEnabled (true);
-  std::cout << "ok, 25 " << std::endl; 
   //-Set frequency for discovery messages monitoring
-  // ueSidelinkConfiguration->SetDiscInterFreq (enbDevs.Get (0)->GetObject<LteEnbNetDevice> ()->GetUlEarfcn ());
-  std::cout << "ok, 26 " << std::endl; 
+  ueSidelinkConfiguration->SetDiscInterFreq (enbDevs.Get (0)->GetObject<LteEnbNetDevice> ()->GetUlEarfcn ());
+
   //Install UE configuration on the UE devices with the corresponding preconfiguration
   ueSidelinkConfiguration->SetSlPreconfiguration (preconfigurationRelay);
   lteHelper->InstallSidelinkConfiguration (relayUeDevs, ueSidelinkConfiguration);
-  std::cout << "ok, 27 " << std::endl; 
 
   ueSidelinkConfiguration->SetSlPreconfiguration (preconfigurationRemote);
   lteHelper->InstallSidelinkConfiguration (remoteUeDevs, ueSidelinkConfiguration);
-  std::cout << "ok, 28 " << std::endl; 
-
+  
   //NAS layer 
   WifiHelper wifi;
 wifi.SetStandard (WIFI_PHY_STANDARD_80211g); //2.4Ghz
 wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager",
                                 "DataMode", StringValue ("ErpOfdmRate54Mbps"));
-std::cout << "ok, 29 " << std::endl; 
-
+ 
 WifiMacHelper wifiMac;
 YansWifiPhyHelper wifiPhy = YansWifiPhyHelper::Default ();
 YansWifiChannelHelper wifiChannel;
@@ -765,46 +687,43 @@ YansWifiPhyHelper phy = wifiPhy;
 phy.SetChannel (wifiChannel.Create ());
 WifiMacHelper mac = wifiMac;
 allUeDevs = wifi.Install (phy, mac, allUeNodes);
-std::cout << "ok, 30 " << std::endl; 
+
+
 
   //Install the IP stack on the UEs and assign network IP addresses
-  
   internet.Install (relayUeNodes);
   internet.Install (remoteUeNodes);
   Ipv6InterfaceContainer ueIpIfaceRelays;
   Ipv6InterfaceContainer ueIpIfaceRemotes;
   ueIpIfaceRelays = epcHelper->AssignUeIpv6Address (relayUeDevs);
   ueIpIfaceRemotes = epcHelper->AssignUeIpv6Address (remoteUeDevs);
-  std::cout << "ok, 31 " << std::endl; 
+
   //Set the default gateway for the UEs
   Ipv6StaticRoutingHelper Ipv6RoutingHelper;
   for (uint32_t u = 0; u < allUeNodes.GetN (); ++u)
-    {  
+    {
       Ptr<Node> ueNode = allUeNodes.Get (u);
       Ptr<Ipv6StaticRouting> ueStaticRouting = Ipv6RoutingHelper.GetStaticRouting (ueNode->GetObject<Ipv6> ());
       ueStaticRouting->SetDefaultRoute (epcHelper->GetUeDefaultGatewayAddress6 (), 1);
-      std::cout << "ok, 32 " << std::endl; 
     }
 
   //Configure IP for the nodes in the Internet (PGW and RemoteHost)
   Ipv6AddressHelper ipv6h;
   ipv6h.SetBase (Ipv6Address ("6001:db80::"), Ipv6Prefix (64));
-  Ipv6InterfaceContainer internetIpIfaces = ipv6h.Assign (allUeDevs);
+  Ipv6InterfaceContainer internetIpIfaces = ipv6h.Assign (internetDevices);
   internetIpIfaces.SetForwarding (0, true);
   internetIpIfaces.SetDefaultRouteInAllNodes (0);
-  std::cout << "ok, 33 " << std::endl; 
-  ns3::PacketMetadata::Enable ();
-  std::cout << "ok, 34 " << std::endl;  
+
   //Set route for the Remote Host to join the LTE network nodes
   Ipv6StaticRoutingHelper ipv6RoutingHelper;
-  // Ptr<Ipv6StaticRouting> remoteHostStaticRouting = ipv6RoutingHelper.GetStaticRouting (remoteHost->GetObject<Ipv6> ());
-  // remoteHostStaticRouting->AddNetworkRouteTo ("7777:f000::", Ipv6Prefix (60), internetIpIfaces.GetAddress (0, 1), 1, 0);
-  std::cout << "ok, 35 " << std::endl; 
+  Ptr<Ipv6StaticRouting> remoteHostStaticRouting = ipv6RoutingHelper.GetStaticRouting (remoteHost->GetObject<Ipv6> ());
+  remoteHostStaticRouting->AddNetworkRouteTo ("7777:f000::", Ipv6Prefix (60), internetIpIfaces.GetAddress (0, 1), 1, 0);
+
   //Configure UE-to-Network Relay network
   proseHelper->SetIpv6BaseForRelayCommunication ("7777:f00e::", Ipv6Prefix (48));
 
   //Configure route between PGW and UE-to-Network Relay network
-  // proseHelper->ConfigurePgwToUeToNetworkRelayRoute (pgw);
+  proseHelper->ConfigurePgwToUeToNetworkRelayRoute (pgw);
 
   //Attach Relay UEs to the eNB
   lteHelper->Attach (relayUeDevs);
@@ -813,6 +732,16 @@ std::cout << "ok, 30 " << std::endl;
     {
       lteHelper->Attach (remoteUeDevs);
     }
+  // interface 0 is localhost, 1 is the p2p device
+  Ipv6Address pgwAddr = internetIpIfaces.GetAddress (0,1);
+  Ipv6Address remoteHostAddr = internetIpIfaces.GetAddress (1,1);
+  // Ipv6Address remoteUeaddress =  internet_uedevices.GetAddress(1,1);
+  // Ipv6Address relayUeaddress =  internet_uedevices.GetAddress(0,1);
+  std::cout << " pgw address : " << pgwAddr << std::endl;
+  std::cout << "remote host address : " << remoteHostAddr << std::endl;
+  // std::cout << "remote ue address : " << remoteUeaddress << std::endl;
+  // std::cout << "relay ue address : " << relayUeaddress << std::endl;
+
 
   ///*** Configure applications ***///
   //For each Remote UE, we have a pair (UpdEchoClient, UdpEchoServer)
@@ -821,9 +750,9 @@ std::cout << "ok, 30 " << std::endl;
   //and to the corresponding Remote UE port
   //UdpEchoServer installed in the echoServerNode, listening to the
   //corresponding Remote UE port
-  std::cout << "ok, 36 " << std::endl; 
+
   Ipv6Address echoServerAddr;
-  if (echoServerNode.compare ("RelayUE") == 0)
+  if (echoServerNode.compare ("RemoteHost") == 0)
     {
       echoServerAddr = internetIpIfaces.GetAddress (1, 1);
     }
@@ -833,18 +762,15 @@ std::cout << "ok, 30 " << std::endl;
       // IP address of the 'Remote UE (0)' before it connects to the Relay UE
       echoServerAddr = Ipv6Address::GetOnes ();
     }
-  
-  std::cout << "ok, 37 " << std::endl;
-
   uint16_t echoPortBase = 50000;
   ApplicationContainer serverApps;
   ApplicationContainer clientApps;
   AsciiTraceHelper ascii;
-  std::cout << "ok, 38 " << std::endl;  
+
   std::ostringstream oss;
   Ptr<OutputStreamWrapper> packetOutputStream = ascii.CreateFileStream ("AppPacketTrace.txt");
   *packetOutputStream->GetStream () << "time(sec)\ttx/rx\tC/S\tNodeID\tIP[src]\tIP[dst]\tPktSize(bytes)" << std::endl;
-  std::cout << "ok, 39 " << std::endl; 
+
   for (uint16_t remUeIdx = 0; remUeIdx < remoteUeNodes.GetN (); remUeIdx++)
     {
       if (echoServerNode.compare ("RemoteUE") == 0 && remUeIdx == 0)
@@ -852,43 +778,35 @@ std::cout << "ok, 30 " << std::endl;
           //No own traffic applications for Remote UE (0) as it is the echoServerNode
           continue;
         }
-      std::cout << "ok, 40 " << std::endl; 
+
       uint16_t remUePort = echoPortBase + remUeIdx;
       uint32_t echoServerNodeId = 0;
       //UdpEchoServer listening in the Remote UE port
       UdpEchoServerHelper echoServerHelper (remUePort);
       ApplicationContainer singleServerApp;
-      std::cout << "ok, 41 " << std::endl; 
       if (echoServerNode.compare ("RelayUE") == 0)
         {
           singleServerApp.Add (echoServerHelper.Install (relayUeNodes));
           echoServerNodeId = relayUeNodes.Get(0)->GetId ();
-          std::cout << "ok,42 " << std::endl; 
         }
       else if (echoServerNode.compare ("RemoteUE") == 0)
         {
           singleServerApp.Add (echoServerHelper.Install (remoteUeNodes.Get (0)));
           echoServerNodeId = remoteUeNodes.Get (0)->GetId ();
-          std::cout << "ok, 43 " << std::endl;
 
         }
-      std::cout << "ok, 44 " << std::endl; 
-      
       singleServerApp.Start (Seconds (1.0));
       singleServerApp.Stop (Seconds (simTime));
-      std::cout << "ok, 45 " << std::endl; 
 
       //Tracing packets on the UdpEchoServer (S)
       oss << "rx\tS\t" << echoServerNodeId;
       singleServerApp.Get (0)->TraceConnect ("RxWithAddresses", oss.str (), MakeBoundCallback (&UePacketTrace, packetOutputStream));
-      std::cout << "ok, 46 " << std::endl; 
       oss.str ("");
       oss << "tx\tS\t" << echoServerNodeId;
       singleServerApp.Get (0)->TraceConnect ("TxWithAddresses", oss.str (), MakeBoundCallback (&UePacketTrace, packetOutputStream));
       oss.str ("");
-      std::cout << "ok, 47 " << std::endl; 
+
       serverApps.Add (singleServerApp);
-      std::cout << "ok, 48 " << std::endl;
 
       //UdpEchoClient in the Remote UE
       UdpEchoClientHelper echoClientHelper (echoServerAddr);
@@ -896,147 +814,99 @@ std::cout << "ok, 30 " << std::endl;
       echoClientHelper.SetAttribute ("Interval", TimeValue (Seconds (0.5)));
       echoClientHelper.SetAttribute ("PacketSize", UintegerValue (150));
       echoClientHelper.SetAttribute ("RemotePort", UintegerValue (remUePort));
-      std::cout << "ok, 49 " << std::endl; 
-      
+
       ApplicationContainer singleClientApp = echoClientHelper.Install (remoteUeNodes.Get (remUeIdx));
       //Start the application 3.0 s after the remote UE started the relay service
       //normally it should be enough time to connect
-      std::cout << "ok, 50 " << std::endl; 
       singleClientApp.Start (Seconds (3.0 + startTimeRemote [remUeIdx]) );
-      std::cout << "ok, 51 " << std::endl; 
       //Stop the application after 10.0 s
       singleClientApp.Stop (Seconds (3.0 + startTimeRemote [remUeIdx] + 10.0));
-      std::cout << "ok, 52 " << std::endl; 
+ 
 
     /* mcptt app**************************************/ 
     //creating mcptt application for each device 
 
-  McpttHelper mcpttHelper;
-  ApplicationContainer mcpttclientApps;
-  McpttTimer mcpttTimer;
-  std::cout << "ok, 53 " << std::endl; 
+McpttHelper mcpttHelper;
+ApplicationContainer mcpttclientApps;
+McpttTimer mcpttTimer;
+
+Time startTime = Seconds (1);
+Time stopTime = Seconds (20); 
+double pushTimeMean = 5.0; // seconds
+double pushTimeVariance = 2.0; // seconds
+double releaseTimeMean = 5.0; // seconds
+double releaseTimeVariance = 2.0; // seconds
+TypeId socketFacTid = UdpSocketFactory::GetTypeId ();
+DataRate dataRate = DataRate ("24kb/s");
+Ipv6Address PeerAddress = Ipv6Address ("6001:db80::");
+Ipv4Address groupAddress4 = Ipv4Address ("255.255.255.255");
+uint32_t msgSize = 60; //60 + RTP header = 60 + 12 = 72
+//creating mcptt service on each node
+
+mcpttHelper.SetPttApp ("ns3::McpttPttApp",
+                        "PeerAddress", Ipv4AddressValue (groupAddress4), 
+                        "PushOnStart", BooleanValue (true));
+mcpttHelper.SetMediaSrc ("ns3::McpttMediaSrc",
+                        "Bytes", UintegerValue (msgSize),
+                        "DataRate", DataRateValue (dataRate));
+mcpttHelper.SetPusher ("ns3::McpttPusher",
+                        "Automatic", BooleanValue (false));
+mcpttHelper.SetPusherPushVariable ("ns3::NormalRandomVariable",
+                        "Mean", DoubleValue (pushTimeMean),
+                        "Variance", DoubleValue (pushTimeVariance));
+mcpttHelper.SetPusherReleaseVariable ("ns3::NormalRandomVariable",
+                        "Mean", DoubleValue (releaseTimeMean),
+                        "Variance", DoubleValue (releaseTimeVariance));
+
+mcpttHelper.EnableStateMachineTraces();       
+
+mcpttclientApps.Add (mcpttHelper.Install (allUeNodes));
+mcpttclientApps.Start (startTime);
+mcpttclientApps.Stop (stopTime);
+
+//creating a call initiated by the press of push button 
+ObjectFactory callFac;
+callFac.SetTypeId ("ns3::McpttCallMachineGrpBroadcast");
+
+ObjectFactory floorFac;
+floorFac.SetTypeId ("ns3::McpttFloorMachineBasic");
+  
 
 
-  Time startTime = Seconds (1);
-  Time stopTime = Seconds (20); 
-  double pushTimeMean = 5.0; // seconds
-  double pushTimeVariance = 2.0; // seconds
-  double releaseTimeMean = 5.0; // seconds
-  double releaseTimeVariance = 2.0; // seconds
-  TypeId socketFacTid = UdpSocketFactory::GetTypeId ();
-  DataRate dataRate = DataRate ("24kb/s");
-  Ipv6Address PeerAddress = Ipv6Address ("6001:db80::");
-  Ipv4Address groupAddress4 = Ipv4Address ("255.255.255.255");
-  uint32_t msgSize = 60; //60 + RTP header = 60 + 12 = 72
-  //creating mcptt service on each node
-  std::cout << "ok, 54 " << std::endl; 
+//creating location to store application info of UEs A, B 
+Ptr<McpttPttApp> ueAPttApp = DynamicCast<McpttPttApp, Application> (mcpttclientApps.Get (0));
 
-  mcpttHelper.SetPttApp ("ns3::McpttPttApp",
-                          "PeerAddress", Ipv4AddressValue (groupAddress4), 
-                          "PushOnStart", BooleanValue (true));
-  mcpttHelper.SetMediaSrc ("ns3::McpttMediaSrc",
-                          "Bytes", UintegerValue (msgSize),
-                          "DataRate", DataRateValue (dataRate));
-  mcpttHelper.SetPusher ("ns3::McpttPusher",
-                          "Automatic", BooleanValue (false));
-  mcpttHelper.SetPusherPushVariable ("ns3::NormalRandomVariable",
-                          "Mean", DoubleValue (pushTimeMean),
-                          "Variance", DoubleValue (pushTimeVariance));
-  mcpttHelper.SetPusherReleaseVariable ("ns3::NormalRandomVariable",
-                          "Mean", DoubleValue (releaseTimeMean),
-                          "Variance", DoubleValue (releaseTimeVariance));
+//floor and call machines generate*******************************
+ueAPttApp->CreateCall (callFac, floorFac);
+ueAPttApp->SelectLastCall ();
 
-  mcpttHelper.EnableStateMachineTraces();       
-  std::cout << "ok, 55 " << std::endl;
+Ipv4AddressValue grpAddr;
 
-  mcpttclientApps.Add (mcpttHelper.Install (allUeNodes));
-  std::cout << "ok, 56 " << std::endl; 
-
-  mcpttclientApps.Start (startTime);
-  std::cout << "ok, 57 " << std::endl; 
-  mcpttclientApps.Stop (stopTime);
-  std::cout << "ok, 58 " << std::endl; 
-
-  //creating a call initiated by the press of push button 
-  ObjectFactory callFac;
-  callFac.SetTypeId ("ns3::McpttCallMachineGrpBroadcast");
-  std::cout << "ok, 59 " << std::endl; 
-  ObjectFactory floorFac;
-  floorFac.SetTypeId ("ns3::McpttFloorMachineBasic");
-  std::cout << "ok, 60 " << std::endl; 
-
-
-  //creating location to store application info of UEs A, B 
-  Ptr<McpttPttApp> ueAPttApp = DynamicCast<McpttPttApp, Application> (mcpttclientApps.Get (0));
-
-  //floor and call machines generate*******************************
-  // uint16_t callId = 1;
-  ueAPttApp->CreateCall (callFac, floorFac);
-  ueAPttApp->SelectLastCall ();
-  std::cout << "ok, 61 " << std::endl;
-
-  Ipv4AddressValue grpAddr;
-  std::cout << "ok, 62 " << std::endl; 
-
-  Simulator::Schedule (Seconds (2.2), &McpttPttApp::TakePushNotification, ueAPttApp);
-  std::cout << "ok, 63 " << std::endl; 
-
-  uint16_t floorPort = McpttPttApp::AllocateNextPortNumber ();
-  uint16_t speechPort = McpttPttApp::AllocateNextPortNumber ();
-  std::cout << "ok, 64 " << std::endl;
-
-  Ptr<McpttCall> ueACall = ueAPttApp->GetSelectedCall ();
-  std::cout << "ok, 65 " << std::endl; 
-
-  Simulator::Schedule (Seconds (2.15), &McpttCall::OpenFloorChan, ueACall, grpAddr.Get (), floorPort);
-  std::cout << "ok, 66 " << std::endl; 
-  Simulator::Schedule (Seconds (2.15), &McpttCall::OpenFloorChan, ueACall, grpAddr.Get (), speechPort);
-  std::cout << "ok, 67 " << std::endl; 
-  Simulator::Schedule (Seconds (5.25), &McpttPttApp::ReleaseCall, ueAPttApp);
-  std::cout << "ok, 68 " << std::endl;
+Simulator::Schedule (Seconds (2.2), &McpttPttApp::TakePushNotification, ueAPttApp);
+uint16_t floorPort = McpttPttApp::AllocateNextPortNumber ();
+uint16_t speechPort = McpttPttApp::AllocateNextPortNumber ();
+Ptr<McpttCall> ueACall = ueAPttApp->GetSelectedCall ();
+Simulator::Schedule (Seconds (2.15), &McpttCall::OpenFloorChan, ueACall, grpAddr.Get (), floorPort);
+Simulator::Schedule (Seconds (2.15), &McpttCall::OpenFloorChan, ueACall, grpAddr.Get (), speechPort);
 
 /** tracing ***************/
-  uint32_t mcpttClientAppNodeId = 0;
-  
-  mcpttClientAppNodeId = remoteUeNodes.Get(0)->GetId ();
-        //Tracing packets on the UdpEchoServer (S)
-  oss << "rx\tS\t" << mcpttClientAppNodeId;
-  mcpttclientApps.Get (0)->TraceConnect ("RxWithAddresses", oss.str (), MakeBoundCallback (&UePacketTrace, packetOutputStream));
-  oss.str ("");
-  std::cout << "ok, 69 " << std::endl; 
-  oss << "tx\tS\t" << mcpttClientAppNodeId;
-  mcpttclientApps.Get (0)->TraceConnect ("TxWithAddresses", oss.str (), MakeBoundCallback (&UePacketTrace, packetOutputStream));
-  oss.str ("");
-  std::cout << "ok, 70 " << std::endl; 
+    uint32_t mcpttClientAppNodeId = 0;
+     
+     mcpttClientAppNodeId = remoteUeNodes.Get(0)->GetId ();
+            //Tracing packets on the UdpEchoServer (S)
+      oss << "rx\tS\t" << mcpttClientAppNodeId;
+      mcpttclientApps.Get (0)->TraceConnect ("RxWithAddresses", oss.str (), MakeBoundCallback (&UePacketTrace, packetOutputStream));
+      oss.str ("");
+      oss << "tx\tS\t" << mcpttClientAppNodeId;
+      mcpttclientApps.Get (0)->TraceConnect ("TxWithAddresses", oss.str (), MakeBoundCallback (&UePacketTrace, packetOutputStream));
+      oss.str ("");
 
-  Ptr<OutputStreamWrapper> stream = ascii.CreateFileStream ("b20.tr");
-  std::cout << "ok, 71 " << std::endl; 
-  wifiPhy.EnableAsciiAll (stream);
-  std::cout << "ok, 72 " << std::endl; 
-  internet.EnableAsciiIpv4All (stream);
-  std::cout << "ok, 73 " << std::endl; 
-  *stream->GetStream () << "time(sec)\ttx/rx\tC/S\tNodeID\tIP[src]\tIP[dst]\tPktSize(bytes)" << std::endl;
-  std::cout << "ok, 74 " << std::endl; 
-  AsciiTraceHelper ascii_wifi;
-  std::cout << "ok, 75 " << std::endl; 
-  wifiPhy.EnableAsciiAll (ascii_wifi.CreateFileStream ("wifi-packet-socket.tr"));
-  std::cout << "ok, 76 " << std::endl; 
- 
-  AsciiTraceHelper ascii_r;
-
-  Ptr<OutputStreamWrapper> rtw = ascii_r.CreateFileStream ("routing_table");
-  std::cout << "ok, 77 " << std::endl; 
-  // AsciiTraceHelper ascii_trace;
-
-  // std::ostringstream oss;
-  // Ptr<OutputStreamWrapper> packetOutputStream = ascii_trace.CreateFileStream ("b20_trace.txt");
-  // *packetOutputStream->GetStream () << "time(sec)\ttx/rx\tC/S\tNodeID\tIP[src]\tIP[dst]\tPktSize(bytes)" << std::endl;
 
 
   NS_LOG_INFO ("Enabling MCPTT traces...");
   mcpttHelper.EnableMsgTraces ();
   mcpttHelper.EnableStateMachineTraces ();
-  std::cout << "ok, 78 " << std::endl; 
+
 
       //Tracing packets on the UdpEchoClient (C)
       oss << "tx\tC\t" << remoteUeNodes.Get (remUeIdx)->GetId ();
@@ -1045,13 +915,11 @@ std::cout << "ok, 30 " << std::endl;
 
       singleClientApp.Get (0)->TraceConnect ("TxWithAddresses", oss.str (), MakeBoundCallback (&UePacketTrace, packetOutputStream));
       oss.str ("");
-      std::cout << "ok, 79 " << std::endl; 
       oss << "rx\tC\t" << remoteUeNodes.Get (remUeIdx)->GetId ();
       singleClientApp.Get (0)->TraceConnect ("RxWithAddresses", oss.str (), MakeBoundCallback (&UePacketTrace, packetOutputStream));
       oss.str ("");
-      std::cout << "ok, 80 " << std::endl; 
+
       clientApps.Add (singleClientApp);
-      std::cout << "ok, 81 " << std::endl; 
 
       if (echoServerNode.compare ("RemoteUE") == 0 && remUeIdx != 0)
         {
@@ -1064,7 +932,6 @@ std::cout << "ok, 30 " << std::endl;
                                remUePort,
                                proseHelper->GetIpv6NetworkForRelayCommunication (),
                                proseHelper->GetIpv6PrefixForRelayCommunication ());
-                               std::cout << "ok, 82 " << std::endl; 
         }
     }
 
@@ -1073,131 +940,93 @@ std::cout << "ok, 30 " << std::endl;
   //Setup dedicated bearer for the Relay UEs
   Ptr<EpcTft> tft = Create<EpcTft> ();
   EpcTft::PacketFilter dlpf;
-  std::cout << "ok, 83 " << std::endl; 
   dlpf.localIpv6Address = proseHelper->GetIpv6NetworkForRelayCommunication ();
-  std::cout << "ok, 84 " << std::endl; 
   dlpf.localIpv6Prefix = proseHelper->GetIpv6PrefixForRelayCommunication ();
-  std::cout << "ok, 85 " << std::endl; 
   tft->Add (dlpf);
-  std::cout << "ok, 86 " << std::endl; 
   EpsBearer bearer (EpsBearer::NGBR_VIDEO_TCP_DEFAULT);
-  // lteHelper->ActivateDedicatedEpsBearer (relayUeDevs, bearer, tft);
-  std::cout << "ok, 87 " << std::endl; 
-  // Ptr<EpcTft> remote_tft = Create<EpcTft> ();
-  //     std::cout << "ok, 88 " << std::endl; 
-  //     EpcTft::PacketFilter rem_dlpf;
-  //     std::cout << "ok, 89 " << std::endl;  
-  //     rem_dlpf.localIpv6Address.Set ("7777:f00e::");
-  //     std::cout << "ok, 90 " << std::endl; 
-  //     rem_dlpf.localIpv6Prefix = Ipv6Prefix (64);
-  //     std::cout << "ok, 91 " << std::endl; 
-  //     remote_tft->Add (rem_dlpf);
-  //     std::cout << "ok, 92 " << std::endl;
+  lteHelper->ActivateDedicatedEpsBearer (relayUeDevs, bearer, tft);
 
-  //     EpsBearer remote_bearer (EpsBearer::NGBR_VIDEO_TCP_DEFAULT);
-  //     lteHelper->ActivateDedicatedEpsBearer (remoteUeDevs.Get (0), remote_bearer, remote_tft);
-      std::cout << "ok, 93 " << std::endl; 
+  Ptr<EpcTft> remote_tft = Create<EpcTft> ();
+      EpcTft::PacketFilter rem_dlpf;
+      rem_dlpf.localIpv6Address.Set ("7777:f00e::");
+      rem_dlpf.localIpv6Prefix = Ipv6Prefix (64);
+      remote_tft->Add (rem_dlpf);
+      EpsBearer remote_bearer (EpsBearer::NGBR_VIDEO_TCP_DEFAULT);
+      lteHelper->ActivateDedicatedEpsBearer (remoteUeDevs.Get (0), remote_bearer, remote_tft);
+
 
   //Schedule the start of the relay service in each UE with their corresponding
   //roles and service codes
   for (uint32_t ryDevIdx = 0; ryDevIdx < relayUeDevs.GetN (); ryDevIdx++)
     {
       uint32_t serviceCode = relayUeDevs.Get (ryDevIdx)->GetObject<LteUeNetDevice> ()->GetImsi ();
-      std::cout << "ok, 94 " << std::endl;
 
       Simulator::Schedule (Seconds (startTimeRelay [ryDevIdx]), &LteSidelinkHelper::StartRelayService, proseHelper, relayUeDevs.Get (ryDevIdx), serviceCode, LteSlUeRrc::ModelA, LteSlUeRrc::RelayUE);
       NS_LOG_INFO ("Relay UE " << ryDevIdx << " node id = [" << relayUeNodes.Get (ryDevIdx)->GetId () << "] provides Service Code " << serviceCode << " and start service at " << startTimeRelay [ryDevIdx] << " s");
       //Remote UEs
       for (uint32_t rm = 0; rm < nRemoteUesPerRelay; ++rm)
         {
-         
           uint32_t rmDevIdx = ryDevIdx * nRemoteUesPerRelay + rm;
-          std::cout << "ok, 95 " << std::endl; 
-          // Simulator::Schedule ((Seconds (startTimeRemote [rmDevIdx])), &LteSidelinkHelper::StartRelayService, proseHelper, remoteUeDevs.Get (rmDevIdx), serviceCode, LteSlUeRrc::ModelA, LteSlUeRrc::RemoteUE);
-          std::cout << "ok, 95.5 " << std::endl; 
+          Simulator::Schedule ((Seconds (startTimeRemote [rmDevIdx])), &LteSidelinkHelper::StartRelayService, proseHelper, remoteUeDevs.Get (rmDevIdx), serviceCode, LteSlUeRrc::ModelA, LteSlUeRrc::RemoteUE);
           NS_LOG_INFO ("Remote UE " << rmDevIdx << " node id = [" << remoteUeNodes.Get (rmDevIdx)->GetId () << "] interested in Service Code " << serviceCode << " and start service at " << startTimeRemote [rmDevIdx] << " s");
-          std::cout << "ok, 96 " << std::endl; 
         }
     }
-  std::cout << "ok, 97 " << std::endl; 
 
   //Tracing PC5 signaling messages
   Ptr<OutputStreamWrapper> PC5SignalingPacketTraceStream = ascii.CreateFileStream ("PC5SignalingPacketTrace.txt");
   *PC5SignalingPacketTraceStream->GetStream () << "time(s)\ttxId\tRxId\tmsgType" << std::endl;
-  std::cout << "ok, 98 " << std::endl; 
 
   for (uint32_t ueDevIdx = 0; ueDevIdx < relayUeDevs.GetN (); ueDevIdx++)
     {
       Ptr<LteUeRrc> rrc = relayUeDevs.Get (ueDevIdx)->GetObject<LteUeNetDevice> ()->GetRrc ();
-      std::cout << "ok, 99 " << std::endl; 
       PointerValue ptrOne;
       rrc->GetAttribute ("SidelinkConfiguration", ptrOne);
-      std::cout << "ok, 100 " << std::endl; 
       Ptr<LteSlUeRrc> slUeRrc = ptrOne.Get<LteSlUeRrc> ();
-      std::cout << "ok, 101 " << std::endl; 
       slUeRrc->TraceConnectWithoutContext ("PC5SignalingPacketTrace",
                                            MakeBoundCallback (&TraceSinkPC5SignalingPacketTrace,
                                                               PC5SignalingPacketTraceStream));
-                                                              std::cout << "ok, 102 " << std::endl; 
     }
-  std::cout << "ok, 103 " << std::endl; 
   for (uint32_t ueDevIdx = 0; ueDevIdx < remoteUeDevs.GetN (); ueDevIdx++)
     {
-      std::cout << "ok, 104 " << std::endl; 
       Ptr<LteUeRrc> rrc = remoteUeDevs.Get (ueDevIdx)->GetObject<LteUeNetDevice> ()->GetRrc ();
-      std::cout << "ok, 105 " << std::endl; 
       PointerValue ptrOne;
       rrc->GetAttribute ("SidelinkConfiguration", ptrOne);
-      std::cout << "ok, 106 " << std::endl; 
       Ptr<LteSlUeRrc> slUeRrc = ptrOne.Get<LteSlUeRrc> ();
-      std::cout << "ok, 107 " << std::endl; 
-
       slUeRrc->TraceConnectWithoutContext ("PC5SignalingPacketTrace",
                                            MakeBoundCallback (&TraceSinkPC5SignalingPacketTrace,
                                                               PC5SignalingPacketTraceStream));
-                                                              std::cout << "ok, 108 " << std::endl; 
     }
   
-  std::cout << "ok, 109 " << std::endl;  
 
-  std::ostringstream txWithAddresses;
+
+   std::ostringstream txWithAddresses;
   txWithAddresses << "/NodeList/" << remoteUeDevs.Get (0)->GetNode ()->GetId () << "/ApplicationList/0/TxWithAddresses";
   //Config::ConnectWithoutContext (txWithAddresses.str (), MakeCallback (&SlOoc1Relay1RemoteRegularTestCase::DataPacketSinkTxNode, this));
-  std::cout << "ok, 110 " << std::endl; 
+
   std::ostringstream rxWithAddresses;
   rxWithAddresses << "/NodeList/" << remoteUeDevs.Get (0)->GetNode ()->GetId () << "/ApplicationList/0/RxWithAddresses";
-  std::cout << "ok, 111 " << std::endl; 
-  Ipv6Address groupAddress ("7777:f000::");
-  uint32_t groupL2Address = 0xFF;
 
-  //Set Sidelink bearers
-  Ptr<LteSlTft> sltft = Create<LteSlTft> (LteSlTft::BIDIRECTIONAL, groupAddress, groupL2Address);
-  proseHelper->ActivateSidelinkBearer (Seconds (2.0),allUeDevs, sltft);
 
   lteHelper->EnablePdcpTraces ();
   lteHelper->EnableSlPscchMacTraces ();
   lteHelper->EnableSlPsschMacTraces ();
-  std::cout << "ok, 112 " << std::endl; 
+
   lteHelper->EnableSlRxPhyTraces ();
   lteHelper->EnableSlPscchRxPhyTraces ();
-  std::cout << "ok, 113 " << std::endl;
 
   NS_LOG_INFO ("Simulation time " << simTime << " s");
   NS_LOG_INFO ("Starting simulation...");
-  std::cout << "ok, 114 " << std::endl; 
 
   AnimationInterface anim("b_lte_sl_relay_cluster.xml");
-
+  std::cout << 7 << std::endl;
   anim.SetMaxPktsPerTraceFile(500000); 
   anim.EnablePacketMetadata (true);
-  std::cout << "ok, 115 " << std::endl; 
 
   Simulator::Stop (Seconds (simTime));
-  std::cout << "ok, 116 " << std::endl; 
+  std::cout << 8 << std::endl;
   Simulator::Run ();
-  std::cout << "ok, 117" << std::endl; 
+  std::cout << 9 << std::endl;
   Simulator::Destroy ();
-  std::cout << "ok, 118 " << std::endl; 
   return 0;
 
 }
