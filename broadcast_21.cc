@@ -174,6 +174,7 @@ int main (int argc, char *argv[])
   Config::SetDefault ("ns3::LteSlO2oCommParams::RemoteT4101", UintegerValue (50000));
   Config::SetDefault ("ns3::LteSlO2oCommParams::RemoteT4102", UintegerValue (1000));
 
+  //remote ue info request procedure 
   //Enable the Remote UE information request procedure
   Config::SetDefault ("ns3::LteSlUeRrc::RuirqEnabled",  BooleanValue (true));
 
@@ -313,6 +314,7 @@ int main (int argc, char *argv[])
   pfactory.SetControlPrbNum (22);
   pfactory.SetControlPrbStart (0);
   pfactory.SetControlPrbEnd (49);
+
   //Data
   pfactory.SetDataBitmap (0xFFFFFFFFFF);
   pfactory.SetDataOffset (8); //After 8 subframes of PSCCH
@@ -362,6 +364,7 @@ int main (int argc, char *argv[])
   //Configure Sidelink Preconfiguration for the UEs
   Ptr<LteSlUeRrc> ueSidelinkConfiguration = CreateObject<LteSlUeRrc> ();
   ueSidelinkConfiguration->SetSlEnabled (true);
+  
   LteRrcSap::SlPreconfiguration preconfigurationRemote;
   LteRrcSap::SlPreconfiguration preconfigurationRelay;
 
@@ -390,6 +393,7 @@ int main (int argc, char *argv[])
       //Communication
       preconfigurationRemote.preconfigComm.nbPools = 1;
       LteSlPreconfigPoolFactory preconfCommPoolFactory;
+
       //-Control
       preconfCommPoolFactory.SetControlPeriod ("sf40");
       preconfCommPoolFactory.SetControlBitmap (0x00000000FF); //8 subframes for PSCCH
@@ -397,6 +401,7 @@ int main (int argc, char *argv[])
       preconfCommPoolFactory.SetControlPrbNum (22);
       preconfCommPoolFactory.SetControlPrbStart (0);
       preconfCommPoolFactory.SetControlPrbEnd (49);
+
       //-Data
       preconfCommPoolFactory.SetDataBitmap (0xFFFFFFFFFF);
       preconfCommPoolFactory.SetDataOffset (8); //After 8 subframes of PSCCH
@@ -411,6 +416,7 @@ int main (int argc, char *argv[])
       preconfigurationRemote.preconfigRelay.reselectionInfoOoc.filterCoefficient = 0;
       preconfigurationRemote.preconfigRelay.reselectionInfoOoc.minHyst = 0;
       preconfigurationRemote.preconfigRelay.reselectionInfoOoc.qRxLevMin = -125;
+      
     }
 
   ueSidelinkConfiguration->SetDiscEnabled (true);
