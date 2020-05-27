@@ -613,6 +613,7 @@ main (int argc, char *argv[])
       param.currRxOffset = 0;
       param.currFrameNo = ueRrc->GetFrameNumber ();
       param.currSubframeNo = ueRrc->GetSubFrameNumber ();
+      
       NotifyChangeOfSyncRef (streamSyncRef,param );
     }
   /*END Synchronization*/

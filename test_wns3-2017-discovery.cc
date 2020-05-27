@@ -49,10 +49,104 @@
 #include <ns3/mcptt-helper.h>
 #include <ns3/mcptt-call-machine-grp-broadcast.h>
 #include <ns3/mcptt-call-machine-grp-broadcast-state.h>
+#include <ns3/callback.h>
+
+#include "ns3/log.h"
+#include "ns3/simulator.h"
+
+#include "ns3/lte-rlc.h"
+#include "ns3/lte-rlc-tag.h"
+#include "ns3/lte-mac-sap.h"
+#include "ns3/lte-rlc-sap.h"
+#include "ns3/ff-mac-sched-sap.h"
 
 using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE ("wns3-2017-discovery");
+
+void
+UePacketTrace (Ptr<OutputStreamWrapper> stream, const Address &localAddrs, std::string context, Ptr<const Packet> p, const Address &srcAddrs, const Address &dstAddrs)
+{
+  std::ostringstream oss;
+  *stream->GetStream () << Simulator::Now ().GetNanoSeconds () / (double) 1e9 << "\t" << context << "\t" << p->GetSize () << "\t";
+  if (InetSocketAddress::IsMatchingType (srcAddrs))
+    {
+      oss << InetSocketAddress::ConvertFrom (srcAddrs).GetIpv4 ();
+      if (!oss.str ().compare ("0.0.0.0")) //srcAddrs not set
+        {
+          *stream->GetStream () << Ipv4Address::ConvertFrom (localAddrs) << ":" << InetSocketAddress::ConvertFrom (srcAddrs).GetPort () << "\t" << InetSocketAddress::ConvertFrom (dstAddrs).GetIpv4 () << ":" << InetSocketAddress::ConvertFrom (dstAddrs).GetPort () << std::endl;
+        }
+      else
+        {
+          oss.str ("");
+          oss << InetSocketAddress::ConvertFrom (dstAddrs).GetIpv4 ();
+          if (!oss.str ().compare ("0.0.0.0")) //dstAddrs not set
+            {
+              *stream->GetStream () << InetSocketAddress::ConvertFrom (srcAddrs).GetIpv4 () << ":" << InetSocketAddress::ConvertFrom (srcAddrs).GetPort () << "\t" <<  Ipv4Address::ConvertFrom (localAddrs) << ":" << InetSocketAddress::ConvertFrom (dstAddrs).GetPort () << std::endl;
+            }
+          else
+            {
+              *stream->GetStream () << InetSocketAddress::ConvertFrom (srcAddrs).GetIpv4 () << ":" << InetSocketAddress::ConvertFrom (srcAddrs).GetPort () << "\t" << InetSocketAddress::ConvertFrom (dstAddrs).GetIpv4 () << ":" << InetSocketAddress::ConvertFrom (dstAddrs).GetPort () << std::endl;
+            }
+        }
+    }
+  else if (Inet6SocketAddress::IsMatchingType (srcAddrs))
+    {
+      oss << Inet6SocketAddress::ConvertFrom (srcAddrs).GetIpv6 ();
+      if (!oss.str ().compare ("::")) //srcAddrs not set
+        {
+          *stream->GetStream () << Ipv6Address::ConvertFrom (localAddrs) << ":" << Inet6SocketAddress::ConvertFrom (srcAddrs).GetPort () << "\t" << Inet6SocketAddress::ConvertFrom (dstAddrs).GetIpv6 () << ":" << Inet6SocketAddress::ConvertFrom (dstAddrs).GetPort () << std::endl;
+        }
+      else
+        {
+          oss.str ("");
+          oss << Inet6SocketAddress::ConvertFrom (dstAddrs).GetIpv6 ();
+          if (!oss.str ().compare ("::")) //dstAddrs not set
+            {
+              *stream->GetStream () << Inet6SocketAddress::ConvertFrom (srcAddrs).GetIpv6 () << ":" << Inet6SocketAddress::ConvertFrom (srcAddrs).GetPort () << "\t" << Ipv6Address::ConvertFrom (localAddrs) << ":" << Inet6SocketAddress::ConvertFrom (dstAddrs).GetPort () << std::endl;
+            }
+          else
+            {
+              *stream->GetStream () << Inet6SocketAddress::ConvertFrom (srcAddrs).GetIpv6 () << ":" << Inet6SocketAddress::ConvertFrom (srcAddrs).GetPort () << "\t" << Inet6SocketAddress::ConvertFrom (dstAddrs).GetIpv6 () << ":" << Inet6SocketAddress::ConvertFrom (dstAddrs).GetPort () << std::endl;
+            }
+        }
+    }
+  else
+    {
+      *stream->GetStream () << "Unknown address type!" << std::endl;
+    }
+}
+
+void
+PrintGnuplottableNodeListToFile (std::string filename)
+{
+  std::ofstream outFile;
+  outFile.open (filename.c_str (), std::ios_base::out | std::ios_base::trunc);
+  if (!outFile.is_open ())
+    {
+      NS_LOG_ERROR ("Can't open file " << filename);
+      return;
+    }
+  outFile << "set xrange [-200:200]; set yrange [-200:200]" << std::endl;
+  for (NodeList::Iterator it = NodeList::Begin (); it != NodeList::End (); ++it)
+    {
+      Ptr<Node> node = *it;
+      int nDevs = node->GetNDevices ();
+      for (int j = 0; j < nDevs; j++)
+        {
+          Ptr<LteUeNetDevice> vdev = node->GetDevice (j)->GetObject <LteUeNetDevice> ();
+          if (vdev)
+            {
+              Vector pos = node->GetObject<MobilityModel> ()->GetPosition ();
+              outFile << "set label \"" << vdev->GetMac()
+                      << "\" at "<< pos.x << "," << pos.y << " left font \"Helvetica,8\" textcolor rgb \"black\" front point pt 7 ps 0.3 lc rgb \"black\" offset 0,0"
+                      << std::endl;
+
+              // Simulator::Schedule (Seconds (1), &PrintHelper::UpdateGnuplottableNodeListToFile, filename, node);
+            }
+        }
+    }
+}
 
 /*Synchronization traces*/
 void
@@ -71,6 +165,7 @@ NotifySendOfSlss (Ptr<OutputStreamWrapper> stream, uint64_t imsi, uint64_t slssi
 
 int main (int argc, char *argv[])
 {
+  // out of coverage scenario 
   // Initialize some values
   double simTime = 10;
   uint32_t nbUes = 10;
@@ -92,7 +187,6 @@ int main (int argc, char *argv[])
     {
       LogLevel logLevel = (LogLevel)(LOG_PREFIX_FUNC | LOG_PREFIX_TIME | LOG_PREFIX_NODE | LOG_LEVEL_ALL);
       LogComponentEnable ("wns3-2017-discovery", logLevel);
-
       LogComponentEnable ("LteSpectrumPhy", logLevel);
       LogComponentEnable ("LteUePhy", logLevel);
       LogComponentEnable ("LteUeRrc", logLevel);
@@ -103,6 +197,7 @@ int main (int argc, char *argv[])
       LogComponentEnable ("LteHelper", logLevel);
     }
 
+  
 
   // Set the UEs power in dBm
   Config::SetDefault ("ns3::LteUePhy::TxPower", DoubleValue (23.0));
@@ -136,7 +231,6 @@ int main (int argc, char *argv[])
   lteHelper->SetEpcHelper (epcHelper);
   Ptr<LteSidelinkHelper> sidelinkHelper = CreateObject<LteSidelinkHelper> ();
   sidelinkHelper->SetLteHelper (lteHelper);
-
 
   // Set pathloss model
   lteHelper->SetAttribute ("PathlossModel", StringValue ("ns3::FriisPropagationLossModel"));
@@ -180,6 +274,8 @@ int main (int argc, char *argv[])
   mobilityUe.SetPositionAllocator (positionAllocUe);
   mobilityUe.Install (ueNodes);
 
+
+  lteHelper->DisableEnbPhy (true);
   NetDeviceContainer ueDevs = lteHelper->InstallUeDevice (ueNodes);
 
   //Fix the random number stream
@@ -275,8 +371,6 @@ preconfiguration.preconfigSync.syncRefDiffHyst = 0; //dB;
 preconfiguration.preconfigSync.syncRefMinHyst = 0; //dB;
 preconfiguration.preconfigSync.filterCoefficient = 0;  //k = 4 ==> a = 0.5, k = 0 ==> a = 1 No filter;
 
-
-
 preconfiguration.preconfigComm.pools[0] = pfactory.CreatePool ();
 pfactory.SetHaveUeSelectedResourceConfig (true);
 
@@ -345,25 +439,29 @@ for (uint32_t i = 0; i < ueDevs.GetN (); i++)
     
 /*NAS layer*******/
 //installing wifi interface in nodes
-WifiHelper wifi;
-wifi.SetStandard (WIFI_PHY_STANDARD_80211g); //2.4Ghz
-wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager",
-                                "DataMode", StringValue ("ErpOfdmRate54Mbps"));
+// WifiHelper wifi;
+// wifi.SetStandard (WIFI_PHY_STANDARD_80211g); //2.4Ghz
+// wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager",
+//                                 "DataMode", StringValue ("ErpOfdmRate54Mbps"));
 
-WifiMacHelper wifiMac;
-YansWifiPhyHelper wifiPhy = YansWifiPhyHelper::Default ();
-YansWifiChannelHelper wifiChannel;
-wifiChannel.SetPropagationDelay ("ns3::ConstantSpeedPropagationDelayModel");
-wifiChannel.AddPropagationLoss ("ns3::FriisPropagationLossModel",
-                                "Frequency", DoubleValue (2.407e9)); //2.4Ghz
+// WifiMacHelper wifiMac;
+// YansWifiPhyHelper wifiPhy = YansWifiPhyHelper::Default ();
+// YansWifiChannelHelper wifiChannel;
+// wifiChannel.SetPropagationDelay ("ns3::ConstantSpeedPropagationDelayModel");
+// wifiChannel.AddPropagationLoss ("ns3::FriisPropagationLossModel",
+//                                 "Frequency", DoubleValue (2.407e9)); //2.4Ghz
 
-wifiMac.SetType ("ns3::AdhocWifiMac");
+// wifiMac.SetType ("ns3::AdhocWifiMac");
 
-YansWifiPhyHelper phy = wifiPhy;
-phy.SetChannel (wifiChannel.Create ());
+// YansWifiPhyHelper phy = wifiPhy;
+// phy.SetChannel (wifiChannel.Create ());
 
-WifiMacHelper mac = wifiMac;
-ueDevs = wifi.Install (phy, mac, ueNodes);
+// WifiMacHelper mac = wifiMac;
+// ueDevs = wifi.Install (phy, mac, ueNodes);
+
+
+LteSidelinkHelper ltesidelink;
+
 
 //installing internet access to all nodes
 NS_LOG_INFO ("Installing internet stack on all nodes...");
@@ -377,6 +475,8 @@ ipv4.SetBase ("10.1.1.0", "255.255.255.0");
 Ipv4InterfaceContainer i = epcHelper->AssignUeIpv4Address (ueDevs);
 
 Ipv4StaticRoutingHelper ipv4RoutingHelper;
+  // Ptr<Ipv4StaticRouting> staticRouting = ipv4RoutingHelper.GetStaticRouting (ueDevs.Get (0)->GetObject<Ipv4> ());
+  // staticRouting->SetDefaultRoute (ueDevs.Get (1)->GetObject<Ipv4> ()->GetAddress (1, 0).GetLocal () , 2 );
 
 for (uint32_t u = 0; u < ueDevs.GetN (); ++u)
   {
@@ -393,12 +493,15 @@ Address remoteAddress;
 Address localAddress;
 remoteAddress = InetSocketAddress (remoteUeaddress, 8000);
 localAddress  = InetSocketAddress (relayUeaddress, 8000);
-// uint32_t groupL2Address = 255;
-// Time slBearersActivationTime = Seconds (1.0);
-// Ptr<LteSlTft> tft = Create<LteSlTft> (LteSlTft::TRANSMIT, relayUeaddress, groupL2Address);
-// sidelinkHelper->ActivateSidelinkBearer (Seconds (1.0), ueDevs.Get(0), tft);
-// tft = Create<LteSlTft> (LteSlTft::RECEIVE, relayUeaddress, groupL2Address);
-// sidelinkHelper->ActivateSidelinkBearer (slBearersActivationTime, ueDevs.Get(1), tft);
+uint32_t groupL2Address = 255;
+Time slBearersActivationTime = Seconds (1.0);
+lteHelper->Attach(ueDevs);
+Ptr<LteSlTft> tft = Create<LteSlTft> (LteSlTft::TRANSMIT, relayUeaddress, groupL2Address);
+sidelinkHelper->ActivateSidelinkBearer (Seconds (1.0), ueDevs.Get(0), tft);
+tft = Create<LteSlTft> (LteSlTft::RECEIVE, relayUeaddress, groupL2Address);
+sidelinkHelper->ActivateSidelinkBearer (slBearersActivationTime, ueDevs.Get(1), tft);
+
+
 ns3::PacketMetadata::Enable ();
 
 /*Application layer*************************************************************************************/
@@ -677,6 +780,16 @@ pkt->AddHeader (msg);
 
 NS_LOG_LOGIC (Simulator::Now ().GetSeconds () << "s: PttApp sending " << msg << ".");
 
+// LteRlcSm lteRlc;
+// lteRlc.DoTransmitPdcpPdu(pkt);
+
+
+
+
+
+
+
+
 
 //start timer TFB1 and TFB2***************************
 //establish media session***************************** 
@@ -713,46 +826,83 @@ Simulator::Schedule (Seconds (5.25), &McpttTimer::Stop, Ctfb1);
 
 /*udp application*/
   //Set Application in the UEs
-  Ipv4Address groupAddress ("225.0.0.0"); //use multicast address as destination
-  UdpClientHelper udpClient (groupAddress, 8000);
-  udpClient.SetAttribute ("MaxPackets", UintegerValue (500));
-  udpClient.SetAttribute ("Interval", TimeValue (Seconds (0.1)));
-  udpClient.SetAttribute ("PacketSize", UintegerValue (280));
+  // Ipv4Address groupAddress ("225.0.0.0"); //use multicast address as destination
+  // UdpClientHelper udpClient (groupAddress, 8000);
+  // udpClient.SetAttribute ("MaxPackets", UintegerValue (500));
+  // udpClient.SetAttribute ("Interval", TimeValue (Seconds (0.1)));
+  // udpClient.SetAttribute ("PacketSize", UintegerValue (280));
 
-  clientApps = udpClient.Install (ueNodes.Get (0));
-  clientApps.Get (0)->SetStartTime (Seconds (3.0));
-  clientApps.Stop (Seconds (5.0));
+  // clientApps = udpClient.Install (ueNodes.Get (0));
+  // clientApps.Get (0)->SetStartTime (Seconds (3.0));
+  // clientApps.Stop (Seconds (5.0));
+
+  // ApplicationContainer serverApps;
+  // PacketSinkHelper sidelinkSink ("ns3::UdpSocketFactory",Address (InetSocketAddress (Ipv4Address::GetAny (), 8000)));
+  // serverApps = sidelinkSink.Install (ueNodes.Get (1));
+  // serverApps.Get (0)->SetStartTime (Seconds (3.0));
+  // lteHelper->Attach (ueDevs.Get(1));
+  OnOffHelper sidelinkClient ("ns3::UdpSocketFactory", remoteAddress);
+  sidelinkClient.SetConstantRate (DataRate ("16kb/s"), 200);
+
+  clientApps = sidelinkClient.Install (ueNodes.Get (0));
+  //onoff application will send the first packet at :
+  //(2.9 (App Start Time) + (1600 (Pkt size in bits) / 16000 (Data rate)) = 3.0 sec
+  clientApps.Start (slBearersActivationTime + Seconds (0.9));
+  clientApps.Stop (stopTime - slBearersActivationTime + Seconds (1.0));
 
   ApplicationContainer serverApps;
-  PacketSinkHelper sidelinkSink ("ns3::UdpSocketFactory",Address (InetSocketAddress (Ipv4Address::GetAny (), 8000)));
+  PacketSinkHelper sidelinkSink ("ns3::UdpSocketFactory", localAddress);
   serverApps = sidelinkSink.Install (ueNodes.Get (1));
-  serverApps.Get (0)->SetStartTime (Seconds (3.0));
-
-
+  serverApps.Start (Seconds (2.0));
+  // PrintGnuplottableNodeListToFile ("scenario.txt");
+sidelinkHelper->ActivateSidelinkBearer (slBearersActivationTime, ueDevs, tft);
+  // Activate a data radio bearer
+  enum EpsBearer::Qci q = EpsBearer::GBR_CONV_VOICE;
+  EpsBearer bearer (q);
+  
+  // Ptr<MmWaveHelper> ptr_mmWave = CreateObject<MmWaveHelper> ();
+  // ptr_mmWave->ActivateDataRadioBearer (ueDevs, bearer);
 /*****************************************************************/
 
 // assigning ip addresses to all devices of nodes
 NS_LOG_INFO ("Assigning IP addresses to each net device...");
 
 
- Ptr<OutputStreamWrapper> stream = ascii.CreateFileStream ("b20.tr");
+ Ptr<OutputStreamWrapper> stream = ascii.CreateFileStream ("discovery.tr");
 //   wifiPhy.EnableAsciiAll (stream);
 
 internet.EnableAsciiIpv4All (stream);
 *stream->GetStream () << "time(sec)\ttx/rx\tC/S\tNodeID\tIP[src]\tIP[dst]\tPktSize(bytes)" << std::endl;
 
+  std::ostringstream oss;
 
 //   AsciiTraceHelper ascii_wifi;
 //   wifiPhy.EnableAsciiAll (ascii_wifi.CreateFileStream ("wifi-packet-socket.tr"));
+      // Set Tx traces
+for (uint16_t i=0; i< ueNodes.GetN()  ; i++){
+for (uint16_t ac = 0; ac < clientApps.GetN (); ac++)
+  {
+    Ipv4Address localAddrs =  clientApps.Get (ac)->GetNode ()->GetObject<Ipv4L3Protocol> ()->GetAddress (1,0).GetLocal ();
+    std::cout << "Tx address: " << localAddrs << std::endl;
+    oss << "tx\t" << ueNodes.Get (i)->GetId () << "\t" << ueNodes.Get (0)->GetDevice (0)->GetObject<LteUeNetDevice> ()->GetImsi ();
+    clientApps.Get (ac)->TraceConnect ("TxWithAddresses", oss.str (), MakeBoundCallback (&UePacketTrace, stream, localAddrs));
+    oss.str ("");
+  }
 
-
-AsciiTraceHelper ascii_r;
-Ptr<OutputStreamWrapper> rtw = ascii_r.CreateFileStream ("routing_table");
-
+// Set Rx traces
+for (uint16_t ac = 0; ac < serverApps.GetN (); ac++)
+  {
+    Ipv4Address localAddrs =  serverApps.Get (ac)->GetNode ()->GetObject<Ipv4L3Protocol> ()->GetAddress (1,0).GetLocal ();
+    std::cout << "Rx address: " << localAddrs << std::endl;
+    oss << "rx\t" << ueNodes.Get (i)->GetId () << "\t" << ueNodes.Get (1)->GetDevice (0)->GetObject<LteUeNetDevice> ()->GetImsi ();
+    serverApps.Get (ac)->TraceConnect ("RxWithAddresses", oss.str (), MakeBoundCallback (&UePacketTrace, stream, localAddrs));
+    oss.str ("");
+  }
+}
 AsciiTraceHelper ascii_trace;
 
-std::ostringstream oss;
-Ptr<OutputStreamWrapper> packetOutputStream = ascii_trace.CreateFileStream ("b20_trace.txt");
+
+Ptr<OutputStreamWrapper> packetOutputStream = ascii_trace.CreateFileStream ("discovery_trace.txt");
 *packetOutputStream->GetStream () << "time(sec)\ttx/rx\tC/S\tNodeID\tIP[src]\tIP[dst]\tPktSize(bytes)" << std::endl;
 
 
@@ -766,13 +916,13 @@ rxWithAddresses << "/NodeList/" << ueDevs.Get (0)->GetNode ()->GetId () << "/App
 //Trace file table header
 *stream->GetStream () << "time(sec)\ttx/rx\tNodeID\tIMSI\tPktSize(bytes)\tIP[src]\tIP[dst]" << std::endl;
 
-ns3::PacketMetadata::Enable ();
 
   ///*** End of application configuration ***///
   //other traces
  
 // Set Discovery Traces
-  //Enable traces
+//Enable traces
+
 lteHelper->EnablePhyTraces ();
 lteHelper->EnableMacTraces ();
 lteHelper->EnableRlcTraces ();
@@ -781,7 +931,7 @@ lteHelper->EnablePdcpTraces ();
 lteHelper->EnableSlPscchMacTraces ();
 
 lteHelper->EnableSlPscchRxPhyTraces ();
-
+lteHelper->EnableSlPsschMacTraces ();
 lteHelper->EnableSlRxPhyTraces ();
 lteHelper->EnableSlPsdchMacTraces ();
 lteHelper->EnableDiscoveryMonitoringRrcTraces ();
@@ -798,5 +948,6 @@ anim.SetMaxPktsPerTraceFile(500000);
 Simulator::Run ();
 Simulator::Destroy ();
 return 0;
+
 
 }

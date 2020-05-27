@@ -460,8 +460,8 @@ bool useIPv6 = false;
   //Set Sidelink bearers
   //Ptr<LteSlTft> tft = Create<LteSlTft> (LteSlTft::BIDIRECTIONAL, groupAddress4, groupL2Address);
   proseHelper->ActivateSidelinkBearer (Seconds (2.0), ueDevs, tft);
-  NoBackhaulEpcHelper nobackhaulHelper;
-  Ptr<NetDevice> uedevice;
+  // NoBackhaulEpcHelper nobackhaulHelper;
+  // Ptr<NetDevice> uedevice;
   //nobackhaulHelper.ActivateSidelinkBearer (uedevice,tft);
   ///*** End of application configuration ***///
   
