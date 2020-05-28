@@ -45,6 +45,7 @@
 #include <ns3/netanim-module.h>
 #include <ns3/udp-socket-factory.h>
 #include <ns3/udp-echo-client.h>
+#include "ns3/flow-monitor-module.h"
 
 #include <cfloat>
 #include <sstream>
@@ -213,6 +214,16 @@ int main (int argc, char *argv[])
   Config::SetDefault ("ns3::LteSpectrumPhy::SlDataErrorModelEnabled", BooleanValue (true));
   Config::SetDefault ("ns3::LteSpectrumPhy::DropRbOnCollisionEnabled", BooleanValue (false));
 
+
+  Config::SetDefault ("ns3::LteHelper::PathlossModel", StringValue( "ns3::ThreeGppIndoorFactoryPropagationLossModel"));
+  // Config::SetDefault ("ns3::LteHelper::PathlossModel", StringValue( "ns3::BuildingsPropagationLossModel"));
+  // Config::SetDefault ("ns3::MmWave3gppPropagationLossModel::Frequency", DoubleValue(6e9));
+  //   Config::SetDefault ("ns3::MmWave3gppPropagationLossModel::Shadowing", BooleanValue(true));
+  Config::SetDefault ("ns3::ThreeGppPropagationLossModel::ShadowingEnabled",  BooleanValue (true));
+  Config::SetDefault ("ns3::ThreeGppPropagationLossModel::Frequency",  DoubleValue (800e6));
+  
+  
+
   ConfigStore inputConfig;
   inputConfig.ConfigureDefaults ();
   // parse again so we can override input file default values via command line
@@ -266,7 +277,23 @@ int main (int argc, char *argv[])
     }
 
   NS_LOG_INFO ("Deploying UE's...");
+ lteHelper->SetSpectrumChannelType ("ns3::MultiModelSpectrumChannel");
+ lteHelper->GetDownlinkSpectrumChannel();
 
+  lteHelper->SetFadingModel("ns3::TraceFadingLossModel");
+  std::ifstream ifTraceFile;
+  ifTraceFile.open ("../../src/lte/model/fading-traces/fading_trace_ETU_3kmph.fad", std::ifstream::in);
+  if (ifTraceFile.good ())
+  {
+    // script launched by test.py
+    lteHelper->SetFadingModelAttribute ("TraceFilename", StringValue ("../../src/lte/model/fading-traces/fading_trace_ETU_3kmph.fad"));
+  }
+  else
+  {
+    // script launched as an example
+    lteHelper->SetFadingModelAttribute ("TraceFilename", StringValue ("src/lte/model/fading-traces/fading_trace_ETU_3kmph.fad"));
+    NS_LOG_UNCOND ("Trace file load fail");
+  }
   //Create nodes (UEs)
   // NodeContainer ueNodes;
   // ueNodes.Create (3);
@@ -422,34 +449,7 @@ randomStream += lteHelper->AssignStreams (allUeDevs, randomStream);
   ueSidelinkConfiguration->SetSlPreconfiguration (preconfiguration);
   lteHelper->InstallSidelinkConfiguration (allUeDevs, ueSidelinkConfiguration);
 
-  /*Synchronization*/
-  //Set initial SLSSID and start of the first scanning for all UEs
-  uint16_t base_t = 2000; //ms
-  for (uint16_t devIt = 0; devIt < allUeDevs.GetN (); devIt++)
-    {
-      allUeDevs.Get (devIt)->GetObject<LteUeNetDevice> ()->GetRrc ()->SetSlssid (devIt + 10);
-      allUeDevs.Get (devIt)->GetObject<LteUeNetDevice> ()->GetPhy ()->SetFirstScanningTime (MilliSeconds (base_t + (devIt * base_t)));
-      std::cout << "node ID :"  << allUeDevs.Get(devIt)->GetNode()->GetId() << " IMSI" << allUeDevs.Get (devIt)->GetObject<LteUeNetDevice> ()->GetRrc ()->GetImsi ()
-                << " SLSSID " << devIt + 10
-                << " First Scan "  << base_t + (devIt * base_t) << " ms" << std::endl;
-
-    }
-
   
-  //Tracing synchronization stuffs
-  AsciiTraceHelper ascii;
-  Ptr<OutputStreamWrapper> streamSyncRef = ascii.CreateFileStream (" nyncRef.txt");
-  *streamSyncRef->GetStream () << "Time\tIMSI\tprevSLSSID\tprevRxOffset\tprevFrameNo\tprevSframeNo\tcurrSLSSID\tcurrRxOffset\tcurrFrameNo\tcurrSframeNo" << std::endl;
-  Ptr<OutputStreamWrapper> streamSendOfSlss = ascii.CreateFileStream ("TxSlss.txt");
-  *streamSendOfSlss->GetStream () << "Time\tIMSI\tSLSSID\ttxOffset\tinCoverage\tFrameNo\tSframeNo" << std::endl;
-  for (uint32_t i = 0; i < allUeDevs.GetN (); ++i)
-    {
-      Ptr<LteUeRrc> ueRrc =  allUeDevs.Get (i)->GetObject<LteUeNetDevice> ()->GetRrc ();
-      ueRrc->TraceConnectWithoutContext ("ChangeOfSyncRef", MakeBoundCallback (&NotifyChangeOfSyncRef, streamSyncRef));
-      ueRrc->TraceConnectWithoutContext ("SendSLSS", MakeBoundCallback (&NotifySendOfSlss, streamSendOfSlss));
-
-    }
-
       std::cout << "oki 1" << std ::endl;
 
   InternetStackHelper internet;
@@ -500,7 +500,8 @@ randomStream += lteHelper->AssignStreams (allUeDevs, randomStream);
       tft = Create<LteSlTft> (LteSlTft::BIDIRECTIONAL, groupAddress6, groupL2Address);
     }
 
-    //Configure UE-to-Network Relay network
+  
+  //Configure UE-to-Network Relay network
   proseHelper->SetIpv6BaseForRelayCommunication ("7777:f00e::", Ipv6Prefix (64));
 
   
@@ -652,24 +653,77 @@ randomStream += lteHelper->AssignStreams (allUeDevs, randomStream);
   //       }
   //   }
 
+  //Set Sidelink bearers
+  proseHelper->ActivateSidelinkBearer (slBearersActivationTime, allUeDevs, tft);
 
-  OnOffHelper sidelinkClient ("ns3::UdpSocketFactory", remoteAddress);
-  sidelinkClient.SetConstantRate (DataRate ("16kb/s"), 200);
+  /*Synchronization*/
+  //Set initial SLSSID and start of the first scanning for all UEs
+  uint16_t base_t = 2000; //ms
+  for (uint16_t devIt = 0; devIt < allUeDevs.GetN (); devIt++)
+    {
+      allUeDevs.Get (devIt)->GetObject<LteUeNetDevice> ()->GetRrc ()->SetSlssid (devIt + 10);
+      allUeDevs.Get (devIt)->GetObject<LteUeNetDevice> ()->GetPhy ()->SetFirstScanningTime (MilliSeconds (base_t + (devIt * base_t)));
+      std::cout << "node ID :"  << allUeDevs.Get(devIt)->GetNode()->GetId() << " IMSI" << allUeDevs.Get (devIt)->GetObject<LteUeNetDevice> ()->GetRrc ()->GetImsi ()
+                << " SLSSID " << devIt + 10
+                << " First Scan "  << base_t + (devIt * base_t) << " ms" << std::endl;
 
+    }
+
+  
+  //Tracing synchronization stuffs
+  //only device with  imsi 1 is sending sync signals
+  AsciiTraceHelper ascii;
+  Ptr<OutputStreamWrapper> streamSyncRef = ascii.CreateFileStream (" SnyncRef.txt");
+  *streamSyncRef->GetStream () << "Time\tIMSI\tprevSLSSID\tprevRxOffset\tprevFrameNo\tprevSframeNo\tcurrSLSSID\tcurrRxOffset\tcurrFrameNo\tcurrSframeNo" << std::endl;
+  Ptr<OutputStreamWrapper> streamSendOfSlss = ascii.CreateFileStream ("TxSlss.txt");
+  *streamSendOfSlss->GetStream () << "Time\tIMSI\tSLSSID\ttxOffset\tinCoverage\tFrameNo\tSframeNo" << std::endl;
+  for (uint32_t i = 0; i < allUeDevs.GetN (); ++i)
+    {
+      Ptr<LteUeRrc> ueRrc =  allUeDevs.Get (i)->GetObject<LteUeNetDevice> ()->GetRrc ();
+      ueRrc->TraceConnectWithoutContext ("ChangeOfSyncRef", MakeBoundCallback (&NotifyChangeOfSyncRef, streamSyncRef));
+      ueRrc->TraceConnectWithoutContext ("SendSLSS", MakeBoundCallback (&NotifySendOfSlss, streamSendOfSlss));
+
+    }
+ 
+  
+  // Arbitrary protocol type.
+  // Note: PacketSocket doesn't have any L4 multiplexing or demultiplexing
+  //       The only mux/demux is based on the protocol field
+
+  //TCP layer socket added to devices  
+
+  Ptr<PacketSocketClient> client = CreateObject<PacketSocketClient> ();
+
+
+  Ptr<PacketSocketServer> server = CreateObject<PacketSocketServer> ();
+
+  //applications for TCP 
+  UdpClientHelper sidelinkClient (remoteAddress,8000);
+  // sidelinkClient.SetAttribute ("DataRate", StringValue ("5Mbps"));
+  sidelinkClient.SetAttribute ("Interval", TimeValue (Seconds(1)));
+  sidelinkClient.SetAttribute ("MaxPackets", UintegerValue(1000000));
+  sidelinkClient.SetAttribute("PacketSize", UintegerValue(250));
+  PacketSocketAddress socketAddr;
+  socketAddr.SetSingleDevice (0);
+  client->SetRemote (socketAddr);
   ApplicationContainer clientApps = sidelinkClient.Install (allUeNodes.Get (0));
+  
   //onoff application will send the first packet at :
   //(2.9 (App Start Time) + (1600 (Pkt size in bits) / 16000 (Data rate)) = 3.0 sec
   clientApps.Start (slBearersActivationTime + Seconds (0.9));
   clientApps.Stop (simTime - slBearersActivationTime + Seconds (1.0));
-
+  
+  socketAddr.SetPhysicalAddress (localAddress);
+  server->SetLocal (socketAddr);
+  socketAddr.SetProtocol (1);
   ApplicationContainer serverApps;
+  //local address_relay address 
   PacketSinkHelper sidelinkSink ("ns3::UdpSocketFactory", localAddress);
   serverApps = sidelinkSink.Install (allUeNodes.Get (1));
   serverApps.Start (Seconds (2.0));
+  serverApps.Stop (simTime - slBearersActivationTime + Seconds (1.0));
+  
 
-
-  //Set Sidelink bearers
-  proseHelper->ActivateSidelinkBearer (slBearersActivationTime, allUeDevs, tft);
   ///*** End of application configuration ***///
 
   // AsciiTraceHelper ascii;
@@ -735,14 +789,15 @@ randomStream += lteHelper->AssignStreams (allUeDevs, randomStream);
   //     uint32_t serviceCode = relayUeDevs.Get (ryDevIdx)->GetObject<LteUeNetDevice> ()->GetImsi ();
 
   //     Simulator::Schedule (slBearersActivationTime, &LteSidelinkHelper::StartRelayService, proseHelper, relayUeDevs.Get (ryDevIdx), serviceCode, LteSlUeRrc::ModelA, LteSlUeRrc::RelayUE);
-  //     // NS_LOG_INFO ("Relay UE " << ryDevIdx << " node id = [" << relayUeNodes.Get (ryDevIdx)->GetId () << "] provides Service Code " << serviceCode << " and start service at " << startTimeRelay [ryDevIdx] << " s");
-  //     //Remote UEs
-  //     for (uint32_t rm = 0; rm < 1; ++rm)
-  //       {
-  //         uint32_t rmDevIdx = ryDevIdx * 1 + rm;
-  //         Simulator::Schedule (slBearersActivationTime, &LteSidelinkHelper::StartRelayService, proseHelper, remoteUeDevs.Get (rmDevIdx), serviceCode, LteSlUeRrc::ModelA, LteSlUeRrc::RemoteUE);
-  //         // NS_LOG_INFO ("Remote UE " << rmDevIdx << " node id = [" << remoteUeNodes.Get (rmDevIdx)->GetId () << "] interested in Service Code " << serviceCode << " and start service at " << startTimeRemote [rmDevIdx] << " s");
-  //       }
+  // //     // NS_LOG_INFO ("Relay UE " << ryDevIdx << " node id = [" << relayUeNodes.Get (ryDevIdx)->GetId () << "] provides Service Code " << serviceCode << " and start service at " << startTimeRelay [ryDevIdx] << " s");
+  // //     //Remote UEs
+  // //     for (uint32_t rm = 0; rm < 1; ++rm)
+  // //       {
+  // //         uint32_t rmDevIdx = ryDevIdx * 1 + rm;
+  // //         std::cout <<"check" <<rmDevIdx << std::endl;
+  // //         Simulator::Schedule (slBearersActivationTime, &LteSidelinkHelper::StartRelayService, proseHelper, remoteUeDevs.Get (rmDevIdx), serviceCode, LteSlUeRrc::ModelA, LteSlUeRrc::RemoteUE);
+  // // //         // NS_LOG_INFO ("Remote UE " << rmDevIdx << " node id = [" << remoteUeNodes.Get (rmDevIdx)->GetId () << "] interested in Service Code " << serviceCode << " and start service at " << startTimeRemote [rmDevIdx] << " s");
+  // //       }
   //   }
 
 
@@ -771,18 +826,11 @@ randomStream += lteHelper->AssignStreams (allUeDevs, randomStream);
                                                               PC5SignalingPacketTraceStream));
     }
 
-  // First packet as normal (goes via Rtr1)
-  // Simulator::Schedule (Seconds (0.1),&StartFlow, srcSocket1, dstaddr, dstport);
 
-  // Ptr<Socket> dst = Socket::CreateSocket(dest_node->GetDevice(1), TypeId::LookupByName("ns3::UdpSocketFactory"));
-
-
-  // InetSocketAddress addr = InetSocketAddress(localAddress, echoport );
-  // dst->Bind(addr);
-  // dst->SetRecvCallback(MakeCallback(&BNode::recv_pkg, dest_node.get()));
   
   NS_LOG_INFO ("Enabling Sidelink traces...");
-
+  ns3::PacketMetadata::Enable();
+  
   lteHelper->EnableSlPscchMacTraces ();
   lteHelper->EnableSlPsschMacTraces ();
   lteHelper->EnableSlPsdchMacTraces ();
@@ -793,10 +841,20 @@ randomStream += lteHelper->AssignStreams (allUeDevs, randomStream);
   lteHelper->EnableDiscoveryMonitoringRrcTraces ();
   lteHelper->EnablePdcpTraces ();
   NS_LOG_INFO ("Starting simulation...");
+  
+  Ptr<FlowMonitor> flowMonitor;
+  FlowMonitorHelper flowHelper;
+  flowMonitor = flowHelper.InstallAll();
+  flowMonitor->CheckForLostPackets ();
+  Ptr<Ipv6FlowClassifier> classifier = DynamicCast<Ipv6FlowClassifier> (flowHelper.GetClassifier ());
+  FlowMonitor::FlowStatsContainer stats = flowMonitor->GetFlowStats ();
+
 
   Simulator::Stop (simTime);
   AnimationInterface anim("test_sl.xml");
   anim.SetMaxPktsPerTraceFile(500000);
+  // anim.EnablePacketMetadata (true);
+
   Simulator::Run ();
   Simulator::Destroy ();
   return 0;
