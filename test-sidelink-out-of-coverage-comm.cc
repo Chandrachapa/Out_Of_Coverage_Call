@@ -180,7 +180,7 @@ NS_LOG_COMPONENT_DEFINE ("LteSlOutOfCovrg");
 
 int main (int argc, char *argv[])
 {
-  Time simTime = Seconds (6);
+  Time simTime = Seconds (10);
   bool enableNsLogs = false;
   bool useIPv6 = true;
 
@@ -294,37 +294,6 @@ int main (int argc, char *argv[])
     lteHelper->SetFadingModelAttribute ("TraceFilename", StringValue ("src/lte/model/fading-traces/fading_trace_ETU_3kmph.fad"));
     NS_LOG_UNCOND ("Trace file load fail");
   }
-  //Create nodes (UEs)
-  // NodeContainer ueNodes;
-  // ueNodes.Create (3);
-  // NS_LOG_INFO ("UE 1 node id = [" << ueNodes.Get (0)->GetId () << "]");
-  // NS_LOG_INFO ("UE 2 node id = [" << ueNodes.Get (1)->GetId () << "]");
-
-  // //Position of the nodes
-  // Ptr<ListPositionAllocator> positionAllocUe1 = CreateObject<ListPositionAllocator> ();
-  // positionAllocUe1->Add (Vector (0.0, 0.0, 1.5));
-  // Ptr<ListPositionAllocator> positionAllocUe2 = CreateObject<ListPositionAllocator> ();
-  // positionAllocUe2->Add (Vector (20.0, 0.0, 1.5));
-  //   Ptr<ListPositionAllocator> positionAllocUe3 = CreateObject<ListPositionAllocator> ();
-  // positionAllocUe2->Add (Vector (10.0, 1.0, 1.5));
-
-  // //Install mobility
-
-  // MobilityHelper mobilityUe1;
-  // mobilityUe1.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-  // mobilityUe1.SetPositionAllocator (positionAllocUe1);
-  // mobilityUe1.Install (ueNodes.Get (0));
-
-  // MobilityHelper mobilityUe2;
-  // mobilityUe2.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-  // mobilityUe2.SetPositionAllocator (positionAllocUe2);
-  // mobilityUe2.Install (ueNodes.Get (1));
-  
-  // MobilityHelper mobilityUe3;
-  // mobilityUe3.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-  // mobilityUe3.SetPositionAllocator (positionAllocUe3);
-  // mobilityUe3.Install (ueNodes.Get (2));
-
 
   NodeContainer ueNodes;
   ueNodes.Create (3);
@@ -550,109 +519,7 @@ randomStream += lteHelper->AssignStreams (allUeDevs, randomStream);
       Simulator::Schedule (Seconds (2.0),&LteSidelinkHelper::StartDiscoveryApps, proseHelper, ueNetDevice, apps, LteSlUeRrc::Monitoring);
     }
 
-  // //Set Application in the UEs
-  // std::string echoServerNode ("RemoteUE");
-  // Ipv6Address echoServerAddr;
-
- 
-  //     std::cout << "oki 2" << std ::endl;
-
-  //     // We use a dummy IP address for initial configuration as we don't know the
-  //     // IP address of the 'Remote UE (0)' before it connects to the Relay UE
-  // echoServerAddr = Ipv6Address::GetOnes ();
-    
-  //     std::cout << "oki 3" << std ::endl;
-
-  //  for (uint16_t remUeIdx = 0; remUeIdx < remoteUeNodes.GetN (); remUeIdx++)
-  //   {std::cout << "oki 4" << std ::endl; 
-  //     // if (echoServerNode.compare ("RemoteUE") == 0 && remUeIdx == 0)
-  //     //   {std::cout << "oki 5" << std ::endl; 
-  //     //     //No own traffic applications for Remote UE (0) as it is the echoServerNode
-  //     //     continue;
-  //     //   }
-         
-  //     std::cout << "oki 6" << std ::endl; 
-  //     ApplicationContainer serverApps;
-  //     ApplicationContainer clientApps;
-  //     std::ostringstream oss;
-  //     uint16_t echoPortBase = 50000;
-  //     uint16_t remUePort = echoPortBase + remUeIdx;
-  //     uint32_t echoServerNodeId = 0;
-  //     //UdpEchoServer listening in the Remote UE port
-  //     UdpEchoServerHelper echoServerHelper (remUePort);
-  //     ApplicationContainer singleServerApp;
-
-  //     std::cout << "oki 7" << std ::endl;
-
-  //     Ptr<OutputStreamWrapper> packetOutputStream = ascii.CreateFileStream ("AppPacketTrace.txt");
-  //      std::cout << "oki 8" << std ::endl;
-  //     *packetOutputStream->GetStream () << "time(sec)\ttx/rx\tC/S\tNodeID\tIP[src]\tIP[dst]\tPktSize(bytes)" << std::endl;
-
-  //     // if (echoServerNode.compare ("RemoteHost") == 0)
-  //     //   {
-  //     //     singleServerApp.Add (echoServerHelper.Install (remoteHost));
-  //     //     echoServerNodeId = remoteHost->GetId ();
-  //     //   }
-  //     // else 
-  //     if (echoServerNode.compare ("RemoteUE") == 0)
-  //       {
-  //         singleServerApp.Add (echoServerHelper.Install (remoteUeNodes.Get (0)));
-  //         echoServerNodeId = remoteUeNodes.Get (0)->GetId ();
-
-  //       }
-  //     singleServerApp.Start (Seconds (1.0));
-  //     singleServerApp.Stop (Seconds (simTime));
-      
-      
-
-  //     //Tracing packets on the UdpEchoServer (S)
-  //     oss << "rx\tS\t" << echoServerNodeId;
-  //     singleServerApp.Get (0)->TraceConnect ("RxWithAddresses", oss.str (), MakeBoundCallback (&UePacketTrace, packetOutputStream));
-  //     oss.str ("");
-  //     oss << "tx\tS\t" << echoServerNodeId;
-  //     singleServerApp.Get (0)->TraceConnect ("TxWithAddresses", oss.str (), MakeBoundCallback (&UePacketTrace, packetOutputStream));
-  //     oss.str ("");
-
-  //     serverApps.Add (singleServerApp);
-
-  //     //UdpEchoClient in the Remote UE
-  //     UdpEchoClientHelper echoClientHelper (echoServerAddr);
-  //     echoClientHelper.SetAttribute ("MaxPackets", UintegerValue (20));
-  //     echoClientHelper.SetAttribute ("Interval", TimeValue (Seconds (0.5)));
-  //     echoClientHelper.SetAttribute ("PacketSize", UintegerValue (150));
-  //     echoClientHelper.SetAttribute ("RemotePort", UintegerValue (remUePort));
-
-  //     ApplicationContainer singleClientApp = echoClientHelper.Install (remoteUeNodes.Get (remUeIdx));
-  //     //Start the application 3.0 s after the remote UE started the relay service
-  //     //normally it should be enough time to connect
-  //     singleClientApp.Start (Seconds (3.0 ) );
-  //     //Stop the application after 10.0 s
-  //     singleClientApp.Stop (Seconds (3.0 + 10.0));
-
-  //     //Tracing packets on the UdpEchoClient (C)
-  //     oss << "tx\tC\t" << remoteUeNodes.Get (remUeIdx)->GetId ();
-  //     singleClientApp.Get (0)->TraceConnect ("TxWithAddresses", oss.str (), MakeBoundCallback (&UePacketTrace, packetOutputStream));
-  //     oss.str ("");
-  //     oss << "rx\tC\t" << remoteUeNodes.Get (remUeIdx)->GetId ();
-  //     singleClientApp.Get (0)->TraceConnect ("RxWithAddresses", oss.str (), MakeBoundCallback (&UePacketTrace, packetOutputStream));
-  //     oss.str ("");
-
-  //     clientApps.Add (singleClientApp);
-
-  //     if (echoServerNode.compare ("RemoteUE") == 0 && remUeIdx != 0)
-  //       {
-  //         //Schedule the change of the RemoteAddress to 100 ms before the start of the application
-  //         //normally 'Remote UE (0)' should be already connected to its Relay UE so we can
-  //         //assign its address as RemoteAddress
-  //         Simulator::Schedule (Seconds (3.0 +  - 0.100),
-  //                              &ChangeUdpEchoClientRemote, remoteUeNodes.Get (0),
-  //                              singleClientApp.Get (0)->GetObject<UdpEchoClient> (),
-  //                              remUePort,
-  //                              proseHelper->GetIpv6NetworkForRelayCommunication (),
-  //                              proseHelper->GetIpv6PrefixForRelayCommunication ());
-  //       }
-  //   }
-
+  
   //Set Sidelink bearers
   proseHelper->ActivateSidelinkBearer (slBearersActivationTime, allUeDevs, tft);
 
@@ -703,9 +570,11 @@ randomStream += lteHelper->AssignStreams (allUeDevs, randomStream);
   sidelinkClient.SetAttribute ("Interval", TimeValue (Seconds(1)));
   sidelinkClient.SetAttribute ("MaxPackets", UintegerValue(1000000));
   sidelinkClient.SetAttribute("PacketSize", UintegerValue(250));
+
   PacketSocketAddress socketAddr;
   socketAddr.SetSingleDevice (0);
   client->SetRemote (socketAddr);
+
   ApplicationContainer clientApps = sidelinkClient.Install (allUeNodes.Get (0));
   
   //onoff application will send the first packet at :
@@ -723,7 +592,14 @@ randomStream += lteHelper->AssignStreams (allUeDevs, randomStream);
   serverApps.Start (Seconds (2.0));
   serverApps.Stop (simTime - slBearersActivationTime + Seconds (1.0));
   
+  // double ulEarfcn = remoteUeDevs.Get (0)->GetObject<LteUeNetDevice> ()->GetDlEarfcn();
+// std::cout << "enb uplink carrier frequency: "   << enbDevs.Get (0)->GetObject<LteEnbNetDevice> ()->GetUlEarfcn () << std::endl;
 
+// double ulBandwidth = remoteUeDevs.Get (0)->GetObject<LteUeNetDevice> ()->
+// std::cout << "enb bandwidth: "   << enbDevs.Get (0)->GetObject<LteEnbNetDevice> ()->GetUlBandwidth () << std::endl;
+
+std::vector < NetDeviceContainer > createdgroups;
+createdgroups = proseHelper->AssociateForBroadcast (46.0, ulEarfcn,ulBandwidth, relayUeDevs,-112, 1,LteSidelinkHelper::SLRSRP_PSBCH);
   ///*** End of application configuration ***///
 
   // AsciiTraceHelper ascii;
@@ -781,24 +657,6 @@ randomStream += lteHelper->AssignStreams (allUeDevs, randomStream);
         }
     }
   
-  
-  // //Schedule the start of the relay service in each UE with their corresponding
-  // //roles and service codes
-  // for (uint32_t ryDevIdx = 0; ryDevIdx < relayUeDevs.GetN (); ryDevIdx++)
-  //   {
-  //     uint32_t serviceCode = relayUeDevs.Get (ryDevIdx)->GetObject<LteUeNetDevice> ()->GetImsi ();
-
-  //     Simulator::Schedule (slBearersActivationTime, &LteSidelinkHelper::StartRelayService, proseHelper, relayUeDevs.Get (ryDevIdx), serviceCode, LteSlUeRrc::ModelA, LteSlUeRrc::RelayUE);
-  // //     // NS_LOG_INFO ("Relay UE " << ryDevIdx << " node id = [" << relayUeNodes.Get (ryDevIdx)->GetId () << "] provides Service Code " << serviceCode << " and start service at " << startTimeRelay [ryDevIdx] << " s");
-  // //     //Remote UEs
-  // //     for (uint32_t rm = 0; rm < 1; ++rm)
-  // //       {
-  // //         uint32_t rmDevIdx = ryDevIdx * 1 + rm;
-  // //         std::cout <<"check" <<rmDevIdx << std::endl;
-  // //         Simulator::Schedule (slBearersActivationTime, &LteSidelinkHelper::StartRelayService, proseHelper, remoteUeDevs.Get (rmDevIdx), serviceCode, LteSlUeRrc::ModelA, LteSlUeRrc::RemoteUE);
-  // // //         // NS_LOG_INFO ("Remote UE " << rmDevIdx << " node id = [" << remoteUeNodes.Get (rmDevIdx)->GetId () << "] interested in Service Code " << serviceCode << " and start service at " << startTimeRemote [rmDevIdx] << " s");
-  // //       }
-  //   }
 
 
   //Tracing PC5 signaling messages
@@ -858,5 +716,6 @@ randomStream += lteHelper->AssignStreams (allUeDevs, randomStream);
   Simulator::Run ();
   Simulator::Destroy ();
   return 0;
+
 
 }

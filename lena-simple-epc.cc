@@ -254,16 +254,22 @@ NotifyRaResponseTimeoutUe (uint64_t imsi, bool contention,
   NS_FATAL_ERROR ("NotifyRaResponseTimeoutUe");
 }
 
+static void
+RxDrop (Ptr<const Packet> p)
+{
+  std::cout<<"RxDrop at " << Simulator::Now ().GetSeconds ()<<std::endl;
+}
+
 void 
 ReportUeMeasurementsCallbackDetail (Ptr<OutputStreamWrapper> stream,std::string path, uint16_t rnti, uint16_t cellId, double rsrp, double rsrq, bool servingCell, uint8_t carrier){
-    std::cout << "Ue Measurements"<< std::endl;
-    std::cout << path <<std::endl;
-    std::cout << "cellid:" << cellId<< std::endl;
-    std::cout << "servingCell:" << servingCell << std::endl;
-    std::cout << "carrier:" << carrier << std::endl;
-    std::cout << "rnti:" << rnti<< std::endl;
-    std::cout << "rsrp:" << rsrp<< std::endl;
-    std::cout << "rsrq:" << rsrq<< std::endl; 
+    // std::cout << "Ue Measurements"<< std::endl;
+    // std::cout << path <<std::endl;
+    // std::cout << "cellid:" << cellId<< std::endl;
+    // std::cout << "servingCell:" << servingCell << std::endl;
+    // std::cout << "carrier:" << carrier << std::endl;
+    // std::cout << "rnti:" << rnti<< std::endl;
+    // std::cout << "rsrp:" << rsrp<< std::endl;
+    // std::cout << "rsrq:" << rsrq<< std::endl; 
     // std::cout << "Time:" << Simulator::Now().GetSeconds()<<std::endl; 
     
     // info actual_info;
@@ -291,12 +297,12 @@ ReportUeMeasurementsCallbackDetail (Ptr<OutputStreamWrapper> stream,std::string 
 void
 NotifyUeReport (Ptr<OutputStreamWrapper> stream, std::string context, uint16_t cellid, uint16_t rnti, double rsrp , double avsinr, uint8_t componentCarrier)
 {
-     std::cout << " eNB CellId " << cellid << std::endl
-                << "rnti:" << rnti<< std::endl
-                << " RSRP " << rsrp << std::endl
-                << " SINR " << 10*log(avsinr) / log(10) << std::endl
-                <<  "Time:" << Simulator::Now().GetSeconds()
-                << std::endl;
+     // std::cout << " eNB CellId " << cellid << std::endl
+     //            << "rnti:" << rnti<< std::endl
+     //            << " RSRP " << rsrp << std::endl
+     //            << " SINR " << 10*log(avsinr) / log(10) << std::endl
+     //            <<  "Time:" << Simulator::Now().GetSeconds()
+     //            << std::endl;
 
 
     int nth=3;  //looking for the second ocurrence of "/"
@@ -375,9 +381,9 @@ NS_LOG_COMPONENT_DEFINE ("RelayingSimulator");
 int
 main (int argc, char *argv[])
 {
-  double simTime = 2;
+  double simTime = 10;
   uint16_t n310 = 1;
-  Time t310 = Seconds (0.1);
+  Time t310 = Seconds (1);
   uint16_t n311 = 1;
   // bool useCa = false;
    
@@ -400,8 +406,8 @@ main (int argc, char *argv[])
 
   Config::SetDefault ("ns3::LteHelper::Scheduler", StringValue("ns3::PfFfMacScheduler"));
 
-  Config::SetDefault ("ns3::LteHelper::PathlossModel", StringValue( "ns3::ThreeGppIndoorFactoryPropagationLossModel"));
-  // Config::SetDefault ("ns3::LteHelper::PathlossModel", StringValue( "ns3::BuildingsPropagationLossModel"));
+  // Config::SetDefault ("ns3::LteHelper::PathlossModel", StringValue( "ns3::ThreeGppIndoorFactoryPropagationLossModel"));
+  Config::SetDefault ("ns3::LteHelper::PathlossModel", StringValue( "ns3::Cost231PropagationLossModel"));
   // Config::SetDefault ("ns3::MmWave3gppPropagationLossModel::Frequency", DoubleValue(6e9));
   //   Config::SetDefault ("ns3::MmWave3gppPropagationLossModel::Shadowing", BooleanValue(true));
   Config::SetDefault ("ns3::ThreeGppPropagationLossModel::ShadowingEnabled",  BooleanValue (true));
@@ -414,9 +420,9 @@ main (int argc, char *argv[])
   Config::SetDefault ("ns3::LteEnbNetDevice::DlBandwidth", UintegerValue(100)); //20 mhz  
   Config::SetDefault ("ns3::LteEnbNetDevice::DlEarfcn", UintegerValue( 6250)); // 800 mhz 
   Config::SetDefault ("ns3::LteEnbNetDevice::UlEarfcn", UintegerValue(24250)); // 800 mhz
-  Config::SetDefault ("ns3::LteUePhy::TxPower", DoubleValue(20)); //0.1 W =20
+  Config::SetDefault ("ns3::LteUePhy::TxPower", DoubleValue(1)); //0.1 W =20
   Config::SetDefault ("ns3::LteUePhy::NoiseFigure", DoubleValue(9));
-  Config::SetDefault ("ns3::LteEnbPhy::TxPower", DoubleValue(27)); // 0.5 W =26
+  Config::SetDefault ("ns3::LteEnbPhy::TxPower", DoubleValue(1)); // 0.5 W =26
   Config::SetDefault ("ns3::LteEnbPhy::NoiseFigure", DoubleValue(5)); 
   Config::SetDefault ("ns3::LteAmc::AmcModel", EnumValue (LteAmc::PiroEW2010));
   Config::SetDefault ("ns3::LteAmc::Ber", DoubleValue (0.01));
@@ -681,6 +687,52 @@ main (int argc, char *argv[])
 
   preconfiguration.preconfigGeneral.carrierFreq = 18100;
   preconfiguration.preconfigGeneral.slBandwidth = 100;
+  preconfiguration.preconfigComm.nbPools = 1;
+    LteSlDiscPreconfigPoolFactory pfactory_disc;
+  //discovery
+  pfactory_disc.SetDiscCpLen ("NORMAL");
+  pfactory_disc.SetDiscPeriod ("rf32");
+  pfactory_disc.SetNumRetx (0);
+  pfactory_disc.SetNumRepetition (1);
+
+  pfactory_disc.SetDiscPrbNum (2);
+  pfactory_disc.SetDiscPrbStart (1);
+  pfactory_disc.SetDiscPrbEnd (2);
+  pfactory_disc.SetDiscOffset (0);
+  pfactory_disc.SetDiscBitmap (0x00001);
+  
+  // LteSlPreconfigPoolFactory pfactory;
+  //Control
+  pfactory.SetControlPeriod ("sf40");
+  pfactory.SetControlBitmap (0x00000000FF); //8 subframes for PSCCH
+  pfactory.SetControlOffset (0);
+  pfactory.SetControlPrbNum (22);
+  pfactory.SetControlPrbStart (0);
+  pfactory.SetControlPrbEnd (49);
+
+  //Data
+  pfactory.SetDataBitmap (0xFFFFFFFFFF);
+  pfactory.SetDataOffset (8); //After 8 subframes of PSCCH
+  pfactory.SetDataPrbNum (25);
+  pfactory.SetDataPrbStart (0);
+  pfactory.SetDataPrbEnd (49);
+
+  // preconfiguration.preconfigDisc.pools[0] = pfactory_disc.CreatePool ();
+  // preconfiguration.preconfigDisc.nbPools = 1;
+
+  // preconfiguration.preconfigComm.pools[0] = pfactory.CreatePool ();
+  // preconfiguration.preconfigComm.nbPools = 1;
+     /* Synchronization*/
+  //Synchronization parameters
+  preconfiguration.preconfigSync.syncOffsetIndicator1 = 18;
+  preconfiguration.preconfigSync.syncOffsetIndicator2 = 29;
+  preconfiguration.preconfigSync.syncTxThreshOoC = -60; //dBm;
+  preconfiguration.preconfigSync.syncRefDiffHyst = 0; //dB;
+  preconfiguration.preconfigSync.syncRefMinHyst = 0; //dB;
+  preconfiguration.preconfigSync.filterCoefficient = 0;  //k = 4 ==> a = 0.5, k = 0 ==> a = 1 No filter;
+  /* END Synchronization*/
+
+  ueSidelinkConfiguration->SetSlPreconfiguration (preconfiguration);
   lteHelper->InstallSidelinkConfiguration (ueDevs, ueSidelinkConfiguration);
 
    // Create a single RemoteHost
@@ -732,10 +784,21 @@ main (int argc, char *argv[])
       
     } 
 
+    if (Simulator::Now () == 2.00)
+    {  
+      std::cout<<"IMSI:"<<ueNodes.Get(100)->GetDevice(0)->GetObject <LteUeNetDevice>()->GetImsi()<<std::endl;
+      std::cout<<"Power"<< ueNodes.Get(100)-> GetDevice(0)->GetObject<LteUePhy>()-> GetTxPower();
+      ueNodes.Get(100)-> GetDevice(0)->GetObject<LteUePhy>()-> SetTxPower(1);
+    }
     std::cout<<remoteHostAddr<<std::endl;
 
   // Attach a UE to a eNB
   lteHelper->Attach (ueDevs, enbDevs.Get(0));
+
+  // error model
+Ptr<RateErrorModel> em = CreateObject<RateErrorModel> ();
+em->SetAttribute ("ErrorRate", DoubleValue (0.00001));
+internetDevices.Get (1)->SetAttribute ("ReceiveErrorModel", PointerValue (em));
 
   Ptr<FlowMonitor> flowMonitor;
   FlowMonitorHelper flowHelper;
@@ -773,7 +836,7 @@ main (int argc, char *argv[])
       // serverApps.Add (sidelinkSink.Install(ueNodes.Get(u)));
       // serverApps.Add (packetSinkHelper.Install (ueNodes.Get(u)));
 
-      UdpClientHelper ulClient (ueIpIface.GetAddress (u), ulPort);
+      UdpClientHelper ulClient (remoteHostAddr, ulPort);
       ulClient.SetAttribute ("Interval", TimeValue (MilliSeconds(interPacketInterval)));
       ulClient.SetAttribute("PacketSize", UintegerValue(packetSize));
       ulClient.SetAttribute ("MaxPackets", UintegerValue(1000000));
@@ -783,7 +846,7 @@ main (int argc, char *argv[])
       dlClient.SetAttribute("PacketSize", UintegerValue(packetSize));
       dlClient.SetAttribute ("MaxPackets", UintegerValue(1000000));
 
-      UdpClientHelper client (remoteAddress, otherPort);
+      UdpClientHelper client (ueIpIface.GetAddress (u), otherPort);
       client.SetAttribute ("Interval", TimeValue (Seconds(emergencyIntervalSeconds->GetValue())));
       client.SetAttribute ("MaxPackets", UintegerValue(1000000));
       client.SetAttribute("PacketSize", UintegerValue(packetSize));
@@ -830,7 +893,8 @@ main (int argc, char *argv[])
   Ptr<OutputStreamWrapper> stream1 = asciiTraceHelper.CreateFileStream ("Ueimsi.txt");
   Ptr<OutputStreamWrapper> stream2 = asciiTraceHelper.CreateFileStream ("Ue_Measurement.txt");
 
-
+      //check wheather the packet is dropped at the physical layer
+    internetDevices.Get (1)->TraceConnectWithoutContext("PhyRxDrop", MakeCallback (&RxDrop));
 
   // std::cout<<Simulator::Now().GetSeconds()<<std::endl;
   Config::Connect ("/NodeList/*/DeviceList/*/$ns3::LteUeNetDevice/ComponentCarrierMapUe/*/LteUePhy/ReportCurrentCellRsrpSinr",  MakeBoundCallback (&NotifyUeReport, stream));
@@ -859,18 +923,16 @@ main (int argc, char *argv[])
   //Side Link Traces 
   lteHelper->EnableSlPscchMacTraces ();
   lteHelper->EnableSlPsschMacTraces ();
-  lteHelper->EnableSlPsdchMacTraces ();
+
   lteHelper->EnableSlRxPhyTraces ();
   lteHelper->EnableSlPscchRxPhyTraces ();
-    lteHelper->EnableDiscoveryMonitoringRrcTraces ();
-  // lteHelper->EnablePdcpTraces ();
-
+   lteHelper->EnableDiscoveryMonitoringRrcTraces ();
   // Uncomment to enable PCAP tracing
   p2ph.EnablePcapAll("basic_first");
 
   Simulator::Stop(Seconds(simTime+0.5));
   AnimationInterface anim("ltetryd2d.xml");
-  
+  anim.SetMaxPktsPerTraceFile(500000);
   anim.EnablePacketMetadata (true);
   Simulator::Run();
 
@@ -924,6 +986,7 @@ main (int argc, char *argv[])
         outFile << "  TxOffered:  " << i->second.txBytes * 8.0 / (simTime - 0.01) / 1000 / 1000  << " Mbps\n";
         outFile << "  Rx Bytes:   " << i->second.rxBytes << "\n";
         outFile << "  Lost Packets: " << i->second.lostPackets<< "\n";
+        outFile << "  Packet Forwards: "<< i->second.timesForwarded<<"\n";
         // outFile << " Packets Dropped : " << i-> second.packetsDropped<<"\n";
         // outFile << " Byte Dropped: " << i->second.bytesDropped<<"\n";
         sumTxPackets += i->second.txPackets;
@@ -937,15 +1000,6 @@ main (int argc, char *argv[])
           averageFlowDelay += 1000 * i->second.delaySum.GetSeconds () / i->second.rxPackets;
           delayDrop = i->second.lastDelay.GetSeconds(); 
           std::cout << "Delay per packet"<< delayDrop; 
-          std::cout << enbDevs.Get(0)->GetNode()->GetId()<< std::endl;
-          std::cout << ueIpIface.GetAddress(0,0) << std::endl;
-          std::cout << ueIpIface.GetAddress(1) << std::endl;
-          std::cout << ueIpIface.GetAddress(2) << std::endl;
-          std::cout << ueIpIface.GetAddress(3) << std::endl;
-          std::cout << internetIpIfaces.GetAddress(0) << std::endl;
-          std::cout <<  internetIpIfaces.GetAddress(1) << std::endl;
-
-
         if (delayDrop > 10)
         {
           delayPacketSum ++; 
@@ -999,7 +1053,7 @@ main (int argc, char *argv[])
   flowMonitor->SerializeToXmlFile("test1.xml", true, true);
   /*GtkConfigStore config;
   config.ConfigureAttributes();*/
-std::cout << enbDevs.Get(0)->GetNode()->GetId()<< std::endl;
+
   Simulator::Destroy();
   return 0;
 
